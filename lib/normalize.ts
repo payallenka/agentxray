@@ -49,6 +49,15 @@ function finalize(raw: Omit<Span, "depth" | "durationMs">[], source: string, run
     return { ...s, startMs, endMs, durationMs: endMs - startMs, costUsd, depth: depthOf(s) };
   });
 
+  // Langfuse and some OTLP instrumentations emit tool calls as a generic
+  // "SPAN" with no type hint. A leaf that did work and has no children is a
+  // tool call in everything but name — classify it as one so the loop and
+  // parallelism detectors can see it.
+  const parents = new Set(spans.map((s) => s.parentId).filter(Boolean) as string[]);
+  for (const s of spans) {
+    if (s.kind === "other" && !parents.has(s.id)) s.kind = "tool";
+  }
+
   spans.sort((a, b) => a.startMs - b.startMs || b.durationMs - a.durationMs);
   return { source, runName, spans, totalMs: Math.max(...spans.map((s) => s.endMs)) };
 }

@@ -514,15 +514,25 @@ export function analyze(trace: Trace): Analysis & { graph: Graph; slack: Map<str
     });
   }
 
+  // group identical failures — three timeouts of the same tool is one
+  // problem, not three findings
+  const errorsByName = new Map<string, Span[]>();
   for (const s of spans.filter((x) => x.status === "error")) {
+    (errorsByName.get(s.name) ?? errorsByName.set(s.name, []).get(s.name)!).push(s);
+  }
+  for (const [name, group] of errorsByName) {
+    const distinct = [...new Set(group.map((g) => g.error ?? ""))];
     findings.push({
-      id: `error-${s.id}`,
+      id: `error-${name}`,
       severity: "critical",
-      title: `${s.name} failed`,
-      detail: s.error ?? "Span reported an error status.",
-      spanIds: [s.id],
-      wastedMs: s.durationMs,
-      wastedUsd: s.costUsd,
+      title: group.length > 1 ? `${name} failed ${group.length}×` : `${name} failed`,
+      detail:
+        distinct.length === 1
+          ? distinct[0] || "Span reported an error status."
+          : distinct.map((d) => `• ${d}`).join("\n"),
+      spanIds: group.map((g) => g.id),
+      wastedMs: group.reduce((a, g) => a + g.durationMs, 0),
+      wastedUsd: group.reduce((a, g) => a + (g.costUsd ?? 0), 0),
     });
   }
 
