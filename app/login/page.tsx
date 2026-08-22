@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cloudEnabled, supabase } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup";
 
-export default function LoginPage() {
+function LoginInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get("next") || "/runs";
   const sb = supabase();
 
   const [mode, setMode] = useState<Mode>("signin");
@@ -38,13 +40,13 @@ export default function LoginPage() {
         setBusy(false);
         return;
       }
-      router.push("/analyze");
+      router.push(next);
       return;
     }
 
     const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) { setErr(error.message); setBusy(false); return; }
-    router.push("/analyze");
+    router.push(next);
   }
 
   async function magicLink() {
@@ -88,11 +90,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="mono text-[11px] dim leading-relaxed">
-          The analyzer itself needs no account.{" "}
-          <Link href="/analyze" className="text-violet-300 hover:underline">
-            Use it without signing in ▸
-          </Link>
+        <div className="mono text-[11px] dimmer leading-relaxed">
+          Free while in preview. No card, no seat limits.
         </div>
       </div>
 
@@ -196,12 +195,20 @@ export default function LoginPage() {
             </>
           )}
 
-          <div className="mt-8 pt-5 border-t hairline mono text-[11px] dim leading-relaxed">
-            The analyzer runs entirely in your browser. An account only adds saved history
-            and CI ingest.
+          <div className="mt-8 pt-5 border-t hairline mono text-[11px] dimmer leading-relaxed">
+            Analysis still runs entirely in your browser — an account adds saved
+            history, your team, and CI ingest.
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <LoginInner />
+    </Suspense>
   );
 }

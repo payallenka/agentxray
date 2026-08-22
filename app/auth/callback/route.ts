@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const origin = req.nextUrl.origin;
-  if (!code) return NextResponse.redirect(origin);
+  // magic links and confirmations carry the caller's intended destination
+  const nextParam = req.nextUrl.searchParams.get("next");
+  const dest = nextParam && nextParam.startsWith("/") ? nextParam : "/runs";
+  if (!code) return NextResponse.redirect(`${origin}/login`);
 
   const store = await cookies();
   const supa = createServerClient(
@@ -18,6 +21,9 @@ export async function GET(req: NextRequest) {
       },
     },
   );
-  await supa.auth.exchangeCodeForSession(code);
-  return NextResponse.redirect(origin);
+  const { error } = await supa.auth.exchangeCodeForSession(code);
+  if (error) {
+    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
+  }
+  return NextResponse.redirect(`${origin}${dest}`);
 }
