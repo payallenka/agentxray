@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { AlertCircle, Check, FileUp, FlaskConical, Save } from "lucide-react";
@@ -14,7 +15,7 @@ import { supabase } from "@/lib/supabase/client";
 import { Badge, Button, Card, CardLabel, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
-interface Sample { id: string; label: string; sub: string }
+interface Sample { id: string; label: string; sub: string; demonstrates: string; headline: string }
 
 function AnalyzeInner() {
   const router = useRouter();
@@ -183,7 +184,10 @@ function AnalyzeInner() {
               <CardLabel>Sample runs</CardLabel>
             </div>
             <p className="prose-dim text-[12.5px] mt-2">
-              Synthetic traces for evaluating the detectors.
+              Synthetic traces, each built to exercise a different part of the engine.{" "}
+              <Link href="/docs#samples" className="text-[var(--accent-soft)] hover:underline">
+                what each one shows
+              </Link>
             </p>
             <div className="grid gap-2 mt-3">
               {samples.length === 0 && Array.from({ length: 3 }).map((_, i) => (
@@ -200,8 +204,17 @@ function AnalyzeInner() {
                       : "hairline hover:bg-white/[0.035] hover:border-[var(--line-strong)]",
                   )}
                 >
-                  <div className="text-[13px]">{s.label}</div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[13px]">{s.label}</span>
+                  </div>
                   <div className="mono text-[10px] dimmer mt-0.5">{s.sub}</div>
+                  <div className={cn(
+                    "mono text-[10px] mt-1.5",
+                    s.headline.startsWith("0%") ? "text-[var(--ok)]" : "text-[var(--critical)]",
+                  )}>
+                    {s.headline}
+                  </div>
+                  <p className="prose-dim text-[11.5px] mt-2 leading-relaxed">{s.demonstrates}</p>
                 </button>
               ))}
             </div>

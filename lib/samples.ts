@@ -179,8 +179,50 @@ export const SAMPLE_HEALTHY = JSON.stringify(
   2,
 );
 
-export const SAMPLES = [
-  { id: "react", label: "Degraded ReAct agent", sub: "native format · 13 spans", body: SAMPLE_REACT },
-  { id: "otlp", label: "OpenTelemetry export", sub: "OTLP + GenAI semconv", body: SAMPLE_OTLP },
-  { id: "healthy", label: "Healthy run", sub: "cached, parallel, no loops", body: SAMPLE_HEALTHY },
+export interface SampleMeta {
+  id: string;
+  label: string;
+  sub: string;
+  /** what this run is meant to teach */
+  demonstrates: string;
+  /** the headline result, so the reader knows what to look for */
+  headline: string;
+  body: string;
+}
+
+export const SAMPLES: SampleMeta[] = [
+  {
+    id: "react",
+    label: "Degraded ReAct agent",
+    sub: "native format · 13 spans · 41.8s",
+    demonstrates:
+      "Every detector at once. A support agent that re-sends its whole conversation uncached, " +
+      "searches the same thing three times in different words, fetches two independent records " +
+      "one after the other, retrieves a knowledge-base article nobody reads, and fails an email " +
+      "before retrying it.",
+    headline: "$0.052 recoverable — 56% of spend",
+    body: SAMPLE_REACT,
+  },
+  {
+    id: "otlp",
+    label: "OpenTelemetry export",
+    sub: "OTLP + GenAI semconv · 5 spans",
+    demonstrates:
+      "That an untouched OpenTelemetry export works with no conversion. Raw OTLP with GenAI " +
+      "semantic conventions — gen_ai.usage.*, gen_ai.request.model — parsed straight from the " +
+      "wire format an instrumented stack already emits.",
+    headline: "$0.013 recoverable — 33% of spend",
+    body: SAMPLE_OTLP,
+  },
+  {
+    id: "healthy",
+    label: "Healthy run",
+    sub: "cached, parallel, no loops · 5 spans",
+    demonstrates:
+      "The control case, and the most important of the three. Prefixes cached, independent work " +
+      "overlapping, no repeats, every span reaching the answer. A detector suite that always " +
+      "finds something cannot be trusted when it does.",
+    headline: "0% waste — nothing to fix",
+    body: SAMPLE_HEALTHY,
+  },
 ];

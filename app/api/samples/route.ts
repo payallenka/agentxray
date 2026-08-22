@@ -7,7 +7,7 @@ export const runtime = "nodejs";
  *  path a real trace arrives on, so there is one code path, not two. */
 export async function GET() {
   return NextResponse.json(
-    SAMPLES.map(({ id, label, sub }) => ({ id, label, sub })),
+    SAMPLES.map(({ id, label, sub, demonstrates, headline }) => ({ id, label, sub, demonstrates, headline })),
     { headers: { "cache-control": "public, max-age=3600" } },
   );
 }
