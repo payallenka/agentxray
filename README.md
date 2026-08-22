@@ -1,36 +1,125 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agent X-Ray — APM for AI agent traces
 
-## Getting Started
+Drop in an agent trace, get a root-cause analysis. Not a log viewer.
 
-First, run the development server:
+Existing tools (Langfuse, LangSmith, Braintrust) render the span tree and sum the
+tokens — they tell you *what happened*. Agent X-Ray tells you **why the run was
+slow, where the money went, and which work was wasted**, using the analysis
+discipline APM brought to microservices fifteen years ago.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**Everything runs in your browser.** No upload, no account, no backend in the
+analysis path.
+
+## What it computes
+
+| Analysis | Method |
+|---|---|
+| **Context re-send cost** | A ReAct loop re-sends turns 1..N−1 on turn N, so input tokens grow ~O(n²). Character-level LCP between consecutive LLM inputs splits each call into *novel* vs *carried* tokens; the carried portion not served from cache is priced at 0.9× input rate. |
+| **Critical path + PERT slack** | Rebuilds the real data-flow DAG — structural parent edges *plus* dependencies inferred from 8-word-gram overlap between one span's output and another's input. Forward/backward pass yields longest path and per-span slack. A slow span with slack is not worth optimizing. |
+| **Semantic loop detection** | 64-permutation MinHash over char-5-gram shingles, combined with a stemmed word-set Jaccard for short tool arguments. Clusters at ≥0.7, then classifies **thrash** vs **retry** vs **pagination**. For LLM spans only the novel suffix is compared, so conversation growth isn't mistaken for repetition. |
+| **Dead branches** | Reverse reachability from the answer over data-flow edges only. Unreachable spans produced output that never influenced the result — computed, billed, discarded. |
+| **Missed parallelism** | Sibling tool calls with no dependency that ran sequentially. An intervening LLM turn counts as a real decision point, so genuine ReAct ordering isn't flagged. |
+
+## Ingest
+
+Adapters are tried in order and the first match wins:
+
+- **OTLP / OpenTelemetry JSON** honouring the GenAI semantic conventions (`gen_ai.usage.*`, `gen_ai.operation.name`)
+- **Langfuse** export
+- **LangSmith / LangGraph** run tree
+- Native span format (see `lib/samples.ts`)
+
+## Optional narration
+
+The deterministic engine is the product. An optional LLM pass ranks findings by
+expected value of fix and writes the concrete remediation. It receives **only the
+computed evidence object — never the raw trace**.
+
+Set any one of these in the environment and the "explain + prioritise" button lights up:
+
+```
+XAI_API_KEY=...        # or GROQ_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY
+NARRATE_MODEL=...      # optional override
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Team workspaces (optional)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Local-only mode needs no configuration and never uploads anything. Adding a
+Supabase project turns it into a multi-tenant product: saved runs, team
+history, and programmatic ingest from CI.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Privacy model.** Runs are saved with prompt and completion text **stripped by
+default** — what persists is what was measured: span names, timings, token
+counts, model ids, findings. The analysis is computed *before* redaction and
+stored alongside it, so a redacted run still shows every finding. Teams that
+want full retention can untick the redaction toggle per save.
 
-## Learn More
+**Tenant isolation is enforced by Postgres, not by application code.** Every
+table has Row Level Security keyed on `memberships`; a query that forgets its
+`org_id` filter returns nothing rather than leaking. The membership policy uses
+a `security definer` helper to avoid recursing through its own RLS.
 
-To learn more about Next.js, take a look at the following resources:
+### Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Create a free project at [supabase.com](https://supabase.com)
+2. SQL Editor → paste and run [`supabase/schema.sql`](supabase/schema.sql)
+3. Authentication → Providers → make sure **Email** is enabled (magic link)
+4. Add to `.env.local`:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...     # only needed for /api/ingest
+```
 
-## Deploy on Vercel
+Signing in creates a personal workspace automatically (trigger on
+`auth.users`). Invite teammates by inserting a `memberships` row.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Programmatic ingest
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Issue a key from the workspace panel, then push traces from CI or a
+post-run hook:
+
+```bash
+curl -X POST https://your-app.vercel.app/api/ingest \
+  -H "Authorization: Bearer axr_..." \
+  -H "content-type: application/json" \
+  --data @trace.json
+```
+
+```json
+{
+  "id": "…",
+  "spans": 13,
+  "costUsd": 0.0934,
+  "recoverableUsd": 0.0522,
+  "wasteShare": 0.5589,
+  "findings": [{ "severity": "critical", "title": "Conversation prefix re-sent uncached on every turn" }]
+}
+```
+
+Keys are stored as SHA-256; the plaintext is shown once at creation. The
+endpoint runs the same analysis server-side, so `wasteShare` is a number you
+can assert on — fail the build when an agent regression pushes waste above a
+threshold.
+
+## Run
+
+```bash
+npm install
+npm run dev
+```
+
+## Layout
+
+```
+lib/types.ts      canonical Span / Trace / Finding / Analysis contracts
+lib/normalize.ts  four ingest adapters -> canonical spans
+lib/analyze.ts    DAG, critical path, MinHash, context decomposition
+lib/pricing.ts    model -> $/1M table
+lib/samples.ts    three demo traces (degraded, OTLP, healthy)
+app/page.tsx      waterfall, findings, cost attribution
+app/api/narrate   provider-agnostic narration proxy
+```
+
+Adding a detector is `(spans, graph) => Finding[]` — no architectural change.
