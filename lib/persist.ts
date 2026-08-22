@@ -25,6 +25,31 @@ export function redactSpans(spans: Span[]): Span[] {
   }));
 }
 
+/**
+ * Content address for a run: the structural shape of the trace, independent
+ * of when it was ingested. Two pushes of the same payload hash identically;
+ * a genuine re-run of the same workflow will differ in its timings and so
+ * will not collide.
+ */
+export async function contentHash(trace: Trace): Promise<string> {
+  const shape = trace.spans
+    .map((s) =>
+      [s.name, s.kind, Math.round(s.startMs), Math.round(s.endMs),
+       s.inputTokens ?? 0, s.outputTokens ?? 0, s.status].join("|"),
+    )
+    .join("\n");
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`${trace.source}::${trace.runName}::${shape}`),
+  );
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** How long an identical payload is treated as a redelivery rather than a
+ *  new run. Long enough to absorb webhook retries and double-fired hooks,
+ *  short enough that a nightly job still records every night. */
+export const DEDUP_WINDOW_MS = 10 * 60 * 1000;
+
 export function runSummary(trace: Trace, analysis: Analysis) {
   return {
     name: trace.runName,
@@ -47,6 +72,7 @@ export function buildRunPayload(
   orgId: string,
   userId: string,
   redact: boolean,
+  hash?: string,
 ) {
   const { ...serialisable } = analysis;
   return {
@@ -63,6 +89,8 @@ export function buildRunPayload(
       waste: serialisable.waste,
       // Map is not JSON-serialisable
       slack: Object.fromEntries((analysis as Analysis & { slack?: Map<string, number> }).slack ?? []),
+      // carried inside the JSON so dedup needs no schema migration
+      contentHash: hash ?? null,
     },
   };
 }

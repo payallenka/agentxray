@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { normalize } from "@/lib/normalize";
 import { analyze } from "@/lib/analyze";
-import { buildRunPayload } from "@/lib/persist";
+import { buildRunPayload, contentHash, DEDUP_WINDOW_MS } from "@/lib/persist";
 
 export const runtime = "nodejs";
 
@@ -51,8 +51,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 
+  // Redelivered webhooks and double-fired hooks push byte-identical payloads.
+  // Collapse those; allow a real re-run through, and let ?force=true override.
+  const traceHash = await contentHash(trace);
+  const force = req.nextUrl.searchParams.get("force") === "true";
+
+  if (!force) {
+    const since = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString();
+    const { data: dupe } = await admin
+      .from("runs")
+      .select("id, created_at")
+      .eq("org_id", key.org_id)
+      .eq("analysis->>contentHash", traceHash)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (dupe) {
+      await admin.from("api_keys").update({ last_used_at: new Date().toISOString() }).eq("id", key.id);
+      return NextResponse.json({
+        id: dupe.id,
+        deduplicated: true,
+        firstSeenAt: dupe.created_at,
+        message:
+          "An identical trace was ingested within the last 10 minutes, so this push was " +
+          "collapsed into it. Append ?force=true to store it as a separate run.",
+      });
+    }
+  }
+
   const redact = req.nextUrl.searchParams.get("redact") !== "false";
-  const payload = buildRunPayload(trace, analysis, key.org_id, "", redact);
+  const payload = buildRunPayload(trace, analysis, key.org_id, "", redact, traceHash);
   const { created_by, ...row } = payload; // ingest has no acting user
   void created_by;
 
