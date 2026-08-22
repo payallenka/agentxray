@@ -249,6 +249,42 @@ export default function Landing() {
           </Reveal>
         </section>
 
+        {/* ------------------------- audience -------------------------- */}
+        <section className={`${SHELL} py-20 border-t hairline`}>
+          <Reveal>
+            <div className="max-w-2xl">
+              <div className="eyebrow">Who it&apos;s for</div>
+              <h2 className="section-title text-[clamp(1.6rem,2.4vw,2.1rem)] mt-4">
+                Built for the person who owns the bill
+              </h2>
+            </div>
+          </Reveal>
+          <div className="grid md:grid-cols-3 gap-5 mt-10">
+            {[
+              ["Engineers shipping agents",
+               "Which slow step actually gates the run, and which is free to ignore because it has slack."],
+              ["Teams watching an AI budget",
+               "A dollar figure for recoverable spend across every run, and the workflow responsible for most of it."],
+              ["Platform teams",
+               "A CI gate. Push a trace, assert on wasteShare, fail the build when a prompt change makes an agent wasteful."],
+            ].map(([t, d], i) => (
+              <Reveal key={t} delay={i * 0.06}>
+                <Card className="p-6 h-full">
+                  <div className="text-[15.5px]">{t}</div>
+                  <p className="prose-dim text-[13.5px] mt-2">{d}</p>
+                </Card>
+              </Reveal>
+            ))}
+          </div>
+          <Reveal delay={0.2}>
+            <p className="prose-dim text-[13.5px] mt-7 max-w-[70ch]">
+              <span className="text-[var(--ink)]">Not for live monitoring.</span> If you need a
+              collector or alerting, use Langfuse, LangSmith or an OpenTelemetry backend — Agent
+              X-Ray reads what they produce and tells you what it means.
+            </p>
+          </Reveal>
+        </section>
+
         {/* -------------------------- privacy -------------------------- */}
         <section id="privacy" className={`${SHELL} py-24 border-t hairline`}>
           <div className="grid lg:grid-cols-[1fr_minmax(0,460px)] gap-16 items-start">
