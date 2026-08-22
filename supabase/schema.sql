@@ -111,6 +111,12 @@ drop policy if exists runs_insert on runs;
 create policy runs_insert on runs
   for insert with check (org_id in (select public.user_org_ids()));
 
+drop policy if exists runs_update on runs;
+create policy runs_update on runs
+  for update
+  using      (org_id in (select public.user_org_ids()))
+  with check (org_id in (select public.user_org_ids()));
+
 drop policy if exists runs_delete on runs;
 create policy runs_delete on runs
   for delete using (org_id in (select public.user_org_ids()));
