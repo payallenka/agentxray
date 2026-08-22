@@ -12,7 +12,13 @@ function resolveProvider() {
              url: "https://api.x.ai/v1/chat/completions", model: m || "grok-3-mini" };
   if (process.env.GROQ_API_KEY)
     return { kind: "openai" as const, key: process.env.GROQ_API_KEY,
-             url: "https://api.groq.com/openai/v1/chat/completions", model: m || "llama-3.3-70b-versatile" };
+             url: "https://api.groq.com/openai/v1/chat/completions",
+             model: m || "openai/gpt-oss-120b",
+             // gpt-oss is a reasoning model: it streams a long `reasoning`
+             // channel before any content and will spend the whole token
+             // budget thinking if left unbounded. This is a summarisation
+             // job over facts we already computed — it needs no deliberation.
+             reasoningEffort: "low" as const };
   if (process.env.GEMINI_API_KEY)
     return { kind: "openai" as const, key: process.env.GEMINI_API_KEY,
              url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
@@ -66,7 +72,8 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${p.key}` },
           body: JSON.stringify({
-            model: p.model, stream: true, max_tokens: 1024,
+            model: p.model, stream: true, max_tokens: 2048,
+            ...("reasoningEffort" in p ? { reasoning_effort: p.reasoningEffort } : {}),
             messages: [
               { role: "system", content: SYSTEM },
               { role: "user", content: user },
@@ -78,30 +85,55 @@ export async function POST(req: NextRequest) {
     return new Response(`Narration provider returned ${upstream.status}. ${await upstream.text()}`, { status: 200 });
   }
 
-  // Both providers emit SSE; pull the text delta out of each shape.
-  const reader = upstream.body.getReader();
-  const dec = new TextDecoder();
+  // Both providers emit SSE. Reasoning models interleave a `reasoning`
+  // channel we deliberately drop — the user asked for the conclusion, not
+  // the deliberation.
   const enc = new TextEncoder();
-  let buf = "";
 
   const stream = new ReadableStream({
-    async pull(ctrl) {
-      const { done, value } = await reader.read();
-      if (done) { ctrl.close(); return; }
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const data = line.slice(5).trim();
-        if (!data || data === "[DONE]") continue;
-        try {
-          const j = JSON.parse(data);
-          const text =
-            j?.choices?.[0]?.delta?.content ??
-            (j?.type === "content_block_delta" ? j?.delta?.text : undefined);
-          if (text) ctrl.enqueue(enc.encode(text));
-        } catch { /* partial frame, wait for the rest */ }
+    async start(ctrl) {
+      const reader = upstream.body!.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let emitted = 0;
+
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
+            let j: Record<string, unknown>;
+            try { j = JSON.parse(data); } catch { continue; }
+
+            const choices = j.choices as { delta?: { content?: string } }[] | undefined;
+            const text =
+              choices?.[0]?.delta?.content ??
+              (j.type === "content_block_delta"
+                ? (j.delta as { text?: string } | undefined)?.text
+                : undefined);
+
+            if (text) { emitted += text.length; ctrl.enqueue(enc.encode(text)); }
+          }
+        }
+
+        if (emitted === 0) {
+          ctrl.enqueue(enc.encode(
+            "The model returned no text — it likely spent its budget reasoning. " +
+            "The deterministic analysis above is unaffected.",
+          ));
+        }
+      } catch {
+        ctrl.enqueue(enc.encode("\n\n[stream interrupted]"));
+      } finally {
+        ctrl.close();
       }
     },
   });
