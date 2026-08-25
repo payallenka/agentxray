@@ -34,8 +34,14 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       <footer className="border-t hairline">
-        <div className={`${SHELL} py-8 mono text-[11px] dimmer`}>
-          Agent X-Ray · deterministic analysis, nothing uploaded
+        <div className={`${SHELL} py-8`}>
+          <div className="mono text-[11px] dimmer">
+            Agent X-Ray · deterministic analysis, nothing uploaded · MIT licensed
+          </div>
+          <p className="prose-dim text-[11.5px] mt-4 max-w-[80ch] leading-relaxed">
+            A personal, independent open-source project. Not affiliated with, endorsed by, or
+            connected to any employer or client. All sample traces are synthetic.
+          </p>
         </div>
       </footer>
     </main>

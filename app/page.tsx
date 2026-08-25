@@ -79,7 +79,7 @@ export default function Landing() {
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                   className="eyebrow"
                 >
-                  APM for AI agent traces
+                  Cost and latency analysis for AI agent runs
                 </motion.div>
 
                 <motion.h1
@@ -98,9 +98,9 @@ export default function Landing() {
                 >
                   Langfuse, LangSmith and Braintrust render the span tree and sum the tokens. They
                   tell you what happened. They don&apos;t tell you which step gated the latency, where
-                  the money went, or which work was thrown away. We solved this for microservices
-                  fifteen years ago — critical path, cost attribution, slack, root cause. Nobody had
-                  ported it to agent runs.
+                  the money went, or which work was thrown away. Critical path, slack and cost
+                  attribution are decades-old scheduling ideas. Nobody had pointed them at an
+                  agent run.
                 </motion.p>
 
                 <motion.div
@@ -394,9 +394,17 @@ export default function Landing() {
         </section>
 
         <footer className="border-t hairline">
-          <div className={`${SHELL} py-10 mono text-[11px] dimmer flex flex-wrap justify-between gap-3`}>
-            <span>Agent X-Ray · deterministic analysis, nothing uploaded</span>
-            <span>built at a midnight buildathon</span>
+          <div className={`${SHELL} py-10`}>
+            <div className="mono text-[11px] dimmer flex flex-wrap justify-between gap-3">
+              <span>Agent X-Ray · deterministic analysis, nothing uploaded</span>
+              <span>MIT licensed · built at a buildathon</span>
+            </div>
+            <p className="prose-dim text-[11.5px] mt-5 max-w-[80ch] leading-relaxed">
+              A personal, independent open-source project. Not affiliated with, endorsed by, or
+              connected to any employer or client. Agent X-Ray is a post-hoc analyser: it collects
+              no telemetry, monitors nothing, and has no alerting — it reads a trace another tool
+              already recorded. All sample traces are synthetic.
+            </p>
           </div>
         </footer>
       </main>

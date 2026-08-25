@@ -83,10 +83,13 @@ export default function Technical() {
         ]}
       />
       <P>
-        <strong className="text-[var(--ink)]">Who it is not for:</strong> if you need live
-        monitoring, alerting, or a trace collector, this is the wrong tool — use Langfuse,
-        LangSmith or an OpenTelemetry backend. Agent X-Ray is a post-mortem analyzer that reads
-        what those produce.
+        <strong className="text-[var(--ink)]">What this is not.</strong> Agent X-Ray is not an
+        observability platform and is not trying to be one. It ships no agent, no SDK and no
+        instrumentation; it collects nothing, monitors nothing, and cannot alert. It has no view
+        of a running system at all. It reads a trace file that a collector already produced —
+        OpenTelemetry, Langfuse, LangSmith — and computes what that file implies. If you need
+        collection, monitoring or alerting, you need one of those tools; this runs afterwards, on
+        their output.
       </P>
 
       {/* ---------------- pipeline ---------------- */}

@@ -1,14 +1,36 @@
-# Agent X-Ray — APM for AI agent traces
+# Agent X-Ray — cost and latency analysis for AI agent runs
 
 Drop in an agent trace, get a root-cause analysis. Not a log viewer.
 
 Existing tools (Langfuse, LangSmith, Braintrust) render the span tree and sum the
 tokens — they tell you *what happened*. Agent X-Ray tells you **why the run was
 slow, where the money went, and which work was wasted**, using the analysis
-discipline APM brought to microservices fifteen years ago.
+discipline that critical-path scheduling brought to project planning decades ago.
 
 **Everything runs in your browser.** No upload, no account, no backend in the
 analysis path.
+
+## Scope
+
+Agent X-Ray is a **post-hoc analyser**, not a monitoring product. To be explicit
+about what it deliberately does not do:
+
+- It does **not** collect telemetry. There is no agent, no SDK, no instrumentation.
+- It does **not** monitor anything live, and has no alerting.
+- It does **not** store traces by default; analysis runs client-side and nothing
+  is uploaded unless you explicitly save a run.
+
+It reads a trace that some other tool already recorded — OpenTelemetry, Langfuse,
+LangSmith — and computes what that trace implies about wasted tokens and time.
+Think of it as a calculator that runs over a file you already have.
+
+## About this project
+
+A personal, independent open-source project by Payal Lenka, built at the GrowthX
+Buildathon. It is not affiliated with, endorsed by, or connected to any employer
+or client. It contains no third-party proprietary code, data, or confidential
+information; all sample traces are synthetic and generated for testing. Provided
+free under the MIT licence, with no commercial offering.
 
 ## What it computes
 
