@@ -61,6 +61,7 @@ export default function Landing() {
             </div>
             <div className="flex items-center gap-6 text-[13px]">
               <a href="#analyses" className="dim hover:text-[var(--ink)] interactive hidden md:inline">What it computes</a>
+              <Link href="/default" className="dim hover:text-[var(--ink)] interactive hidden md:inline">Live demo</Link>
               <Link href="/docs/start-here" className="dim hover:text-[var(--ink)] interactive hidden md:inline">Docs</Link>
               <a href="#privacy" className="dim hover:text-[var(--ink)] interactive hidden md:inline">Privacy</a>
               <a href="#ci" className="dim hover:text-[var(--ink)] interactive hidden md:inline">CI</a>
@@ -109,6 +110,13 @@ export default function Landing() {
                   className="mt-9"
                 >
                   <HeroCta />
+                  <p className="mono text-[11px] dimmer mt-4">
+                    or{" "}
+                    <Link href="/default" className="text-[var(--accent-soft)] hover:underline">
+                      see a full analysis first
+                    </Link>{" "}
+                    — no account, nothing to install
+                  </p>
                 </motion.div>
               </div>
 
@@ -117,7 +125,8 @@ export default function Landing() {
                 initial={{ opacity: 0, scale: 0.97, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
               >
-                <div className="panel-raised p-5">
+                <Link href="/default" className="block group">
+                <div className="panel-raised p-5 interactive group-hover:border-[var(--line-strong)]">
                   <div className="flex items-center justify-between mb-4">
                     <span className="mono text-[11px] dim">support_agent · refund request</span>
                     <Badge tone="critical">56% WASTE</Badge>
@@ -140,15 +149,21 @@ export default function Landing() {
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-4 mt-4 pt-3 border-t hairline mono text-[10px] dimmer">
-                    <span className="flex items-center gap-1.5">
-                      <i className="w-2.5 h-[3px] rounded-sm bg-[var(--k-llm)]" /> on critical path
+                  <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t hairline mono text-[10px] dimmer">
+                    <span className="flex items-center gap-3">
+                      <span className="flex items-center gap-1.5">
+                        <i className="w-2.5 h-[3px] rounded-sm bg-[var(--k-llm)]" /> critical path
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <i className="w-2.5 h-[3px] rounded-sm bg-[var(--k-tool)] opacity-45" /> has slack
+                      </span>
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <i className="w-2.5 h-[3px] rounded-sm bg-[var(--k-tool)] opacity-45" /> has slack
+                    <span className="text-[var(--accent-soft)] group-hover:underline flex items-center gap-1">
+                      open the live analysis <ArrowRight size={11} />
                     </span>
                   </div>
                 </div>
+                </Link>
               </motion.div>
             </div>
 
@@ -209,8 +224,11 @@ export default function Landing() {
                   <h3 className="text-[19px] font-medium tracking-[-0.015em] mt-5">{a.title}</h3>
                   <p className="text-[14px] mt-2 text-[var(--ink)]/80">{a.lede}</p>
                   <p className="prose-dim text-[13.5px] mt-4 flex-1">{a.body}</p>
-                  <div className="mono text-[11px] mt-6 pt-4 border-t hairline text-[var(--ok)]">
-                    {a.out}
+                  <div className="mono text-[11px] mt-6 pt-4 border-t hairline text-[var(--ok)] flex items-center justify-between gap-3">
+                    <span>{a.out}</span>
+                    <Link href="/default" className="text-[var(--accent-soft)] hover:underline shrink-0 opacity-0 group-hover:opacity-100 interactive">
+                      see it →
+                    </Link>
                   </div>
                 </Card>
               </Reveal>
@@ -386,9 +404,14 @@ export default function Landing() {
                 Sign in and three sample runs are waiting — including a healthy one, so you can
                 see the detectors stay quiet when there&apos;s nothing wrong.
               </p>
-              <Link href="/login" className="inline-block mt-9">
-                <Button variant="primary" size="lg">Start analyzing <ArrowRight size={15} /></Button>
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-9">
+                <Link href="/login">
+                  <Button variant="primary" size="lg">Start analyzing <ArrowRight size={15} /></Button>
+                </Link>
+                <Link href="/default">
+                  <Button variant="secondary" size="lg" mono>see the live demo</Button>
+                </Link>
+              </div>
             </div>
           </Reveal>
         </section>
