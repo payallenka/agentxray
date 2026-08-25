@@ -2,6 +2,13 @@
   "name": "costpath",
   "version": "0.1.0",
   "private": true,
+  "author": "Payal Lenka <payalm.lenka@gmail.com>",
+  "license": "MIT",
+  "description": "Find the wasted tokens and time in an AI agent run.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/payallenka/costpath.git"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

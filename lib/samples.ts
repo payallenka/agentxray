@@ -70,9 +70,9 @@ export const SAMPLE_REACT = JSON.stringify(
 
       { id: "s10", parentId: "root", name: "send_email", kind: "tool", start: 25500, end: 27000,
         status: "error", error: "SMTP 421 service not available, closing transmission channel",
-        input: '{"to":"aryan@example.com","template":"refund_approved"}' },
+        input: '{"to":"customer@example.com","template":"refund_approved"}' },
       { id: "s11", parentId: "root", name: "send_email", kind: "tool", start: 27100, end: 28600,
-        input: '{"to":"aryan@example.com","template":"refund_approved"}',
+        input: '{"to":"customer@example.com","template":"refund_approved"}',
         output: "refund confirmation dispatched" },
 
       { id: "s12", parentId: "root", name: "final_answer", kind: "llm", start: 28700, end: 41700,
