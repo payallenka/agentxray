@@ -6,8 +6,8 @@ import {
 } from "@/components/Diagrams";
 
 export const metadata = {
-  title: "Start here — Agent X-Ray",
-  description: "What Agent X-Ray is, explained from zero. No background assumed.",
+  title: "Start here — Costpath",
+  description: "What Costpath is, explained from zero. No background assumed.",
 };
 
 const H1 = ({ children }: { children: React.ReactNode }) => (
@@ -65,7 +65,7 @@ export default function StartHere() {
       </P>
 
       <Note>
-        <strong className="text-[var(--ink)]">The one-sentence version.</strong> Agent X-Ray reads
+        <strong className="text-[var(--ink)]">The one-sentence version.</strong> Costpath reads
         the record of what an AI agent did, and finds where it wasted time, money, or effort.
       </Note>
 
@@ -109,7 +109,7 @@ export default function StartHere() {
         many tokens were spent, what came back, and what failed.
       </P>
       <Note>
-        Agent X-Ray does not create the recording. Something else records it; X-Ray reads it
+        Costpath does not create the recording. Something else records it; X-Ray reads it
         afterwards. That makes it a <em>post-mortem</em> tool — the run already happened, and we
         are looking backwards at it, like reviewing a football match after the final whistle.
       </Note>
@@ -121,7 +121,7 @@ export default function StartHere() {
       </P>
       <TraceSpansDiagram />
       <P>
-        Every bar in the Agent X-Ray waterfall is one span. Its position is when it started, its
+        Every bar in the Costpath waterfall is one span. Its position is when it started, its
         width is how long it took.
       </P>
 
@@ -131,10 +131,10 @@ export default function StartHere() {
         <strong className="text-[var(--ink)]">Langfuse</strong> and{" "}
         <strong className="text-[var(--ink)]">LangSmith</strong> watch an application while it runs
         and write down what happened. They each write it down slightly differently, which is why
-        Agent X-Ray has an <em>adapter</em> for each — code that translates their format into one
+        Costpath has an <em>adapter</em> for each — code that translates their format into one
         common shape before anything else happens.
       </P>
-      <P>There are two ways to get a trace into Agent X-Ray:</P>
+      <P>There are two ways to get a trace into Costpath:</P>
       <Code>{`A · by hand          B · automatically
 
 Langfuse / LangSmith      your CI or production app
@@ -168,7 +168,7 @@ Langfuse / LangSmith      your CI or production app
       <Note>
         This is the idea most people find surprising:{" "}
         <strong className="text-[var(--ink)]">a slow step is not automatically worth fixing.</strong>{" "}
-        If it has slack, making it faster changes nothing at all. Agent X-Ray tells you which slow
+        If it has slack, making it faster changes nothing at all. Costpath tells you which slow
         steps actually matter.
       </Note>
 
@@ -204,7 +204,7 @@ search("refunds policy damaged items rules")`}</Code>
         progress, engineers call it <strong className="text-[var(--ink)]">thrashing</strong>.
       </P>
       <P>
-        Catching it needs a <em>similarity</em> measure rather than an equality check. Agent X-Ray
+        Catching it needs a <em>similarity</em> measure rather than an equality check. Costpath
         uses one, then sorts what it finds into three kinds: genuine thrash, a legitimate retry
         after an error, and pagination — which is not a problem at all.
       </P>
@@ -216,7 +216,7 @@ search("refunds policy damaged items rules")`}</Code>
       </P>
       <DeadBranchDiagram />
       <P>
-        To find these, Agent X-Ray starts at the answer and walks <em>backwards</em> through what
+        To find these, Costpath starts at the answer and walks <em>backwards</em> through what
         fed into what. Anything it cannot reach never influenced the result.
       </P>
 
@@ -227,7 +227,7 @@ search("refunds policy damaged items rules")`}</Code>
       </P>
       <ParallelDiagram />
       <P>
-        Doing them at the same time costs the slower of the two, not the sum. Agent X-Ray finds
+        Doing them at the same time costs the slower of the two, not the sum. Costpath finds
         calls that could have overlapped and tells you how much time you would get back.
       </P>
 

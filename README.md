@@ -1,9 +1,9 @@
-# Agent X-Ray — cost and latency analysis for AI agent runs
+# Costpath — cost and latency analysis for AI agent runs
 
 Drop in an agent trace, get a root-cause analysis. Not a log viewer.
 
 Existing tools (Langfuse, LangSmith, Braintrust) render the span tree and sum the
-tokens — they tell you *what happened*. Agent X-Ray tells you **why the run was
+tokens — they tell you *what happened*. Costpath tells you **why the run was
 slow, where the money went, and which work was wasted**, using the analysis
 discipline that critical-path scheduling brought to project planning decades ago.
 
@@ -12,7 +12,7 @@ analysis path.
 
 ## Scope
 
-Agent X-Ray is a **post-hoc analyser**, not a monitoring product. To be explicit
+Costpath is a **post-hoc analyser**, not a monitoring product. To be explicit
 about what it deliberately does not do:
 
 - It does **not** collect telemetry. There is no agent, no SDK, no instrumentation.

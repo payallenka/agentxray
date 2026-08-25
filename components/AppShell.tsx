@@ -26,7 +26,7 @@ export default function AppShell({
             <div className="flex items-center gap-7 min-w-0">
               <Link href="/runs" className="flex items-center gap-2.5 shrink-0">
                 <span className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_12px_var(--accent)]" />
-                <span className="font-semibold tracking-[-0.02em]">Agent X-Ray</span>
+                <span className="font-semibold tracking-[-0.02em]">Costpath</span>
               </Link>
               <div className="flex items-center gap-1">
                 {TABS.map((t) => {

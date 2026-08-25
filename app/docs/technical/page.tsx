@@ -3,7 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { PipelineDiagram, CriticalPathDiagram, ContextGrowthDiagram } from "@/components/Diagrams";
 
 export const metadata = {
-  title: "How it works — Agent X-Ray",
+  title: "How it works — Costpath",
   description: "Architecture, algorithms, complexity, measured latency and known limits.",
 };
 
@@ -83,7 +83,7 @@ export default function Technical() {
         ]}
       />
       <P>
-        <strong className="text-[var(--ink)]">What this is not.</strong> Agent X-Ray is not an
+        <strong className="text-[var(--ink)]">What this is not.</strong> Costpath is not an
         observability platform and is not trying to be one. It ships no agent, no SDK and no
         instrumentation; it collects nothing, monitors nothing, and cannot alert. It has no view
         of a running system at all. It reads a trace file that a collector already produced —
@@ -520,7 +520,7 @@ dead = spans ∉ alive ∪ liveSubtree, excluding containers,
       />
 
       <P className="mt-10">
-        Source: <a href="https://github.com/payallenka/agentxray" className="text-[var(--accent-soft)] hover:underline">github.com/payallenka/agentxray</a>
+        Source: <a href="https://github.com/payallenka/costpath" className="text-[var(--accent-soft)] hover:underline">github.com/payallenka/costpath</a>
       </P>
       <Link href="/login"
             className="inline-flex items-center gap-2 mt-3 text-[14px] px-5 py-2.5 rounded-[9px]
