@@ -352,7 +352,7 @@ dead = spans ∉ alive ∪ liveSubtree, excluding containers,
            "A paraphrase that shares few 5-grams — different vocabulary, same meaning.",
            <span key="2" className="text-[var(--warn)]">Medium — a lexical proxy for a semantic question.</span>],
           ["Dead branches",
-           "A tool returning a bare id or number produces no gram overlap, so a used result looks unused.",
+           "A tool returning a bare id or number produces no gram overlap, so a used result looks unused. Guarded against — see below.",
            "A span whose output is quoted but never actually influenced the answer.",
            <span key="3" className="text-[var(--warn)]">Medium — this is the weakest detector.</span>],
           ["Missed parallelism",
@@ -367,6 +367,25 @@ dead = spans ∉ alive ∪ liveSubtree, excluding containers,
         two could have run together — are well-founded inferences that can be wrong on an
         individual span. Treat a finding as a strong lead to verify, not a proof.
       </Warn>
+
+      <H3>Evidence before accusation</H3>
+      <P>
+        Unreachability only means something when the link <em>could</em> have been found. Running
+        the engine against real production traces surfaced the failure: a span whose output was
+        clipped at the preview cap, or never recorded at all, produced no gram overlap and was
+        duly reported as dead. On a small trace with a single priced model call, that read as{" "}
+        <strong className="text-[var(--ink)]">100% recoverable</strong> — waste invented entirely
+        out of missing instrumentation.
+      </P>
+      <P>A span is now only judged dead if all three hold:</P>
+      <Code>{`s.outputPreview exists
+s.outputPreview.length >= 60      // enough for a distinctive 8-word-gram
+!s.outputTruncated                 // not clipped at the 4,000-char cap`}</Code>
+      <P>
+        On the traces that exposed this, spurious findings fell from eleven spans to one, and from
+        three to zero, while the genuine dead branch in the bundled sample — which carries real
+        output text — is still detected. Absence of evidence is not evidence of waste.
+      </P>
 
       <H3>What backs the current confidence</H3>
       <Table dense
@@ -388,6 +407,7 @@ dead = spans ∉ alive ∪ liveSubtree, excluding containers,
         head={["Gap", "What it would take"]}
         rows={[
           ["No labelled corpus", "A set of real traces with human-annotated waste, to measure precision and recall per detector instead of asserting them."],
+          ["Thresholds for judgeability are conservative by choice", "The 60-character floor and the truncation guard trade recall for precision: some genuine dead branches go unreported rather than risk inventing one. On this detector that is the right side to err on."],
           ["No property-based tests", "Invariants worth enforcing: waste ≤ cost, critical path ≤ wall clock, slack ≥ 0, a span is never both alive and dead."],
           ["No differential testing", "Run the same logical trace through all four adapters and assert identical findings — it would have caught the Langfuse classification gap immediately."],
           ["Thresholds tuned on fixtures, not data", "0.70 and 8-word-grams were chosen because they worked on seven traces. A corpus would let them be fitted, or made adaptive."],

@@ -17,6 +17,9 @@ export interface Span {
   costUsd?: number;
   inputPreview?: string;
   outputPreview?: string;
+  /** text was clipped at the preview cap — absence of a match proves nothing */
+  inputTruncated?: boolean;
+  outputTruncated?: boolean;
   depth: number;
 }
 

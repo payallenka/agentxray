@@ -346,12 +346,28 @@ export function deadBranches(spans: Span[], g: Graph, exclude = new Set<string>(
 
   const hasKids = new Set(spans.map((s) => s.parentId).filter(Boolean) as string[]);
 
+  /**
+   * Unreachable is only meaningful when we could have found the link. Three
+   * cases where "no match" means "no evidence", not "no use":
+   *   - the span recorded no output at all
+   *   - its output is too short to yield a distinctive 8-word-gram
+   *   - its output was clipped at the preview cap, so the quoted part may
+   *     simply live past the cut
+   * Calling any of those dead invents waste out of missing instrumentation,
+   * which on a small trace can read as 100% recoverable.
+   */
+  const MIN_JUDGEABLE_OUTPUT = 60;
+  const judgeable = (s: Span) =>
+    !s.outputTruncated &&
+    (s.outputPreview?.length ?? 0) >= MIN_JUDGEABLE_OUTPUT;
+
   return spans.filter(
     (s) =>
       !alive.has(s.id) &&
       !liveSubtree.has(s.id) &&
       !exclude.has(s.id) &&
       !hasKids.has(s.id) &&
+      judgeable(s) &&
       (s.kind === "tool" || s.kind === "retrieval" || s.kind === "llm"),
   );
 }

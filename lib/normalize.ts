@@ -1,10 +1,20 @@
 import { Span, SpanKind, Trace } from "./types";
 import { estimateCost } from "./pricing";
 
-const asStr = (v: unknown, max = 4000): string | undefined => {
+const PREVIEW_CAP = 4000;
+
+const asStr = (v: unknown, max = PREVIEW_CAP): string | undefined => {
   if (v == null) return undefined;
   const s = typeof v === "string" ? v : JSON.stringify(v);
   return s.length > max ? s.slice(0, max) : s;
+};
+
+/** Did asStr clip this value? Matters because a truncated preview can silently
+ *  break data-flow inference — the quoted span may live past the cap. */
+const wasClipped = (v: unknown, max = PREVIEW_CAP): boolean => {
+  if (v == null) return false;
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s.length > max;
 };
 
 const num = (v: unknown): number | undefined => {
@@ -40,13 +50,18 @@ function finalize(raw: Omit<Span, "depth" | "durationMs">[], source: string, run
   };
 
   const spans: Span[] = raw.map((s) => {
+    const inputTruncated = (s.inputPreview?.length ?? 0) >= PREVIEW_CAP;
+    const outputTruncated = (s.outputPreview?.length ?? 0) >= PREVIEW_CAP;
     const startMs = s.startMs - t0;
     const endMs = Math.max(s.endMs - t0, startMs);
     const costUsd =
       s.costUsd ?? (s.inputTokens || s.outputTokens
         ? estimateCost(s.model, s.inputTokens ?? 0, s.outputTokens ?? 0)
         : undefined);
-    return { ...s, startMs, endMs, durationMs: endMs - startMs, costUsd, depth: depthOf(s) };
+    return {
+      ...s, startMs, endMs, durationMs: endMs - startMs, costUsd,
+      inputTruncated, outputTruncated, depth: depthOf(s),
+    };
   });
 
   // Langfuse and some OTLP instrumentations emit tool calls as a generic
