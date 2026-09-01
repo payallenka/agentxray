@@ -90,7 +90,8 @@ function wordGrams(text: string, k = 8): Set<string> {
 export interface Graph {
   deps: Map<string, Set<string>>;   // span -> spans it depends on
   succ: Map<string, Set<string>>;   // span -> spans depending on it
-  inferred: [string, string][];     // edges recovered from data flow, not structure
+  inferred: [string, string][];     // conversational carry + data flow
+  dataFlow: [string, string][];     // recovered from quoted text only
 }
 
 /**
@@ -104,13 +105,15 @@ export function buildGraph(spans: Span[]): Graph {
   const deps = new Map<string, Set<string>>(spans.map((s) => [s.id, new Set<string>()]));
   const succ = new Map<string, Set<string>>(spans.map((s) => [s.id, new Set<string>()]));
   const inferred: [string, string][] = [];
+  const dataFlow: [string, string][] = [];
 
-  const link = (from: string, to: string, isInferred = false) => {
+  const link = (from: string, to: string, isInferred = false, isDataFlow = false) => {
     if (from === to) return;
     if (deps.get(to)?.has(from)) return;
     deps.get(to)?.add(from);
     succ.get(from)?.add(to);
     if (isInferred) inferred.push([from, to]);
+    if (isDataFlow) dataFlow.push([from, to]);
   };
 
   // structural: a parent depends on each of its children completing
@@ -144,10 +147,10 @@ export function buildGraph(spans: Span[]): Graph {
       if (!aOut?.size) continue;
       let hit = 0;
       for (const g of aOut) if (bIn.has(g)) { hit++; if (hit >= 2) break; }
-      if (hit >= 2) link(a.id, b.id, true);
+      if (hit >= 2) link(a.id, b.id, true, true);
     }
   }
-  return { deps, succ, inferred };
+  return { deps, succ, inferred, dataFlow };
 }
 
 /* ==================== critical path + PERT slack ==================== */
@@ -312,8 +315,29 @@ export function detectLoops(spans: Span[]) {
  *  root, so they are deliberately excluded here. Anything unreachable
  *  produced output that never influenced the result - the agent equivalent
  *  of dead code, and directly priceable. */
+/**
+ * Data-flow inference reads quoted text. An agent that passes structured
+ * results between steps — JSON fields, ids, typed envelopes — produces almost
+ * no n-gram overlap, so nothing looks connected and everything looks dead.
+ * Measure whether inference worked before trusting anything built on it.
+ */
+export function dataFlowCoverage(spans: Span[], g: Graph): number {
+  const consumers = spans.filter(
+    (s) => (s.inputPreview?.length ?? 0) >= 60 && s.kind !== "agent" && s.kind !== "chain",
+  );
+  if (consumers.length === 0) return 0;
+  const linked = new Set(g.dataFlow.map(([, to]) => to));
+  return consumers.filter((c) => linked.has(c.id)).length / consumers.length;
+}
+
+/** Below this, "unreachable" means we could not see the wiring, not that the
+ *  work was wasted. Reporting dead branches from that would accuse the most
+ *  expensive span in the run on no evidence. */
+export const MIN_DATAFLOW_COVERAGE = 0.3;
+
 export function deadBranches(spans: Span[], g: Graph, exclude = new Set<string>()) {
   if (!spans.length) return [];
+  if (dataFlowCoverage(spans, g) < MIN_DATAFLOW_COVERAGE) return [];
   const byId = new Map(spans.map((s) => [s.id, s]));
 
   // data-flow adjacency, reversed: consumer -> producers
@@ -484,6 +508,22 @@ export function analyze(trace: Trace): Analysis & { graph: Graph; slack: Map<str
       spanIds: l.members.map((s) => s.id),
       wastedMs: time,
       wastedUsd: cost,
+    });
+  }
+
+  const coverage = dataFlowCoverage(spans, g);
+  if (coverage < MIN_DATAFLOW_COVERAGE && spans.length > 3) {
+    findings.push({
+      id: "dataflow-unreadable",
+      severity: "info",
+      title: "Dead-branch analysis skipped — this trace passes data structurally",
+      detail:
+        `Only ${Math.round(coverage * 100)}% of consuming spans quote text from an earlier span, ` +
+        `so which output fed which step cannot be read from this trace. Steps here appear to pass ` +
+        `structured results — JSON fields, ids, typed envelopes — which carry no quotable text. ` +
+        `Reporting unreachable spans on that basis would flag work that was almost certainly used. ` +
+        `Cost, timing, critical path and loop findings are unaffected.`,
+      spanIds: [],
     });
   }
 
