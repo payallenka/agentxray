@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import * as Dropdown from "@radix-ui/react-dropdown-menu";
 import {
   ClipboardPaste, Terminal, FlaskConical, ArrowRight, Trash2,
   Search, Pencil, Check, X, ChevronDown, ArrowUpDown, SearchX,
+  ChevronLeft, ChevronRight, Filter,
 } from "lucide-react";
 import AppShell, { SHELL } from "@/components/AppShell";
 import AuthGate from "@/components/AuthGate";
@@ -16,6 +18,7 @@ import { supabase } from "@/lib/supabase/client";
 import type { RunRow } from "@/lib/persist";
 import { ms, usd } from "@/lib/pricing";
 import { Badge, Button, Card, CardLabel, Skeleton } from "@/components/ui";
+import { categorise, type Category } from "@/lib/aggregate";
 import { cn } from "@/lib/cn";
 
 type SortKey = "recent" | "waste" | "recoverable" | "cost" | "duration" | "name";
@@ -37,8 +40,26 @@ const WASTE_FILTERS: { key: WasteFilter; label: string }[] = [
   { key: "heavy", label: "Over 25%" },
 ];
 
+const PAGE_SIZE = 25;
+
+const CATEGORY_LABEL: Record<string, string> = {
+  "context-resend": "re-sent conversation prefix",
+  loop: "repeated near-identical calls",
+  "dead-branch": "work that never reached the answer",
+  parallelism: "independent calls run sequentially",
+  failure: "failed steps",
+  unpriced: "cannot be priced",
+  limited: "analysis limited by trace shape",
+  slack: "slow steps off the critical path",
+};
+
 function RunsInner() {
   const sb = supabase();
+  const router = useRouter();
+  const params = useSearchParams();
+  const workflowFilter = params.get("workflow");
+  const findingFilter = params.get("finding") as Category | null;
+  const [page, setPage] = useState(0);
   const [org, setOrg] = useState<{ id: string; name: string } | null>(null);
   const [runs, setRuns] = useState<RunRow[] | null>(null);
 
@@ -53,12 +74,15 @@ function RunsInner() {
 
   const loadRuns = useCallback(async (orgId: string) => {
     if (!sb) return;
+    // the analysis blob is only needed to filter by finding type
+    const cols = "id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share,cp_share,finding_count,redacted,created_at"
+      + (findingFilter ? ",analysis" : "");
     const { data } = await sb
       .from("runs")
-      .select("id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share,cp_share,finding_count,redacted,created_at")
-      .eq("org_id", orgId).order("created_at", { ascending: false }).limit(200);
-    setRuns((data as RunRow[]) ?? []);
-  }, [sb]);
+      .select(cols)
+      .eq("org_id", orgId).order("created_at", { ascending: false }).limit(500);
+    setRuns((data as unknown as RunRow[]) ?? []);
+  }, [sb, findingFilter]);
 
   useEffect(() => {
     if (!sb) { setRuns([]); return; }
@@ -89,6 +113,12 @@ function RunsInner() {
 
   const visible = useMemo(() => {
     let list = [...(runs ?? [])];
+    if (workflowFilter)
+      list = list.filter((r) => r.name.replace(/\s*\(.*\)\s*$/, "").trim() === workflowFilter);
+    if (findingFilter)
+      list = list.filter((r) =>
+        ((r as unknown as { analysis?: { findings?: { id: string }[] } }).analysis?.findings ?? [])
+          .some((f) => categorise(f as never) === findingFilter));
     const needle = q.trim().toLowerCase();
     if (needle) list = list.filter((r) => r.name.toLowerCase().includes(needle));
     if (source !== "all") list = list.filter((r) => r.source === source);
@@ -105,7 +135,14 @@ function RunsInner() {
       name: (a, b) => a.name.localeCompare(b.name),
     };
     return list.sort(by[sort]);
-  }, [runs, q, source, waste, sort]);
+  }, [runs, q, source, waste, sort, workflowFilter, findingFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, pageCount - 1);
+  const shown = visible.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
+
+  // any change to the filters puts you back on the first page
+  useEffect(() => { setPage(0); }, [q, source, waste, sort, workflowFilter, findingFilter]);
 
   async function rename(id: string) {
     const name = draft.trim();
@@ -154,6 +191,28 @@ function RunsInner() {
                   : "Loading…"}
             </p>
           </div>
+
+          {(workflowFilter || findingFilter) && (
+            <Card className="px-4 py-3 flex items-center justify-between gap-4 border-violet-500/30 bg-violet-500/[0.05]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Filter size={14} className="text-[var(--accent-soft)] shrink-0" />
+                <span className="text-[13.5px]">
+                  {visible.length} run{visible.length === 1 ? "" : "s"}
+                  {workflowFilter && <> in <span className="mono">{workflowFilter}</span></>}
+                  {findingFilter && <> with <span className="mono">{CATEGORY_LABEL[findingFilter] ?? findingFilter}</span></>}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <Link href="/insights" className="mono text-[11px] text-[var(--accent-soft)] hover:underline">
+                  ← back to insights
+                </Link>
+                <button onClick={() => router.push("/runs")}
+                        className="mono text-[11px] dimmer hover:text-[var(--ink)] interactive">
+                  clear
+                </button>
+              </div>
+            </Card>
+          )}
 
           {/* toolbar */}
           {runs && runs.length > 0 && (
@@ -254,9 +313,9 @@ function RunsInner() {
             </Card>
           )}
 
-          {visible.length > 0 && (
+          {shown.length > 0 && (
             <div className="grid gap-2.5">
-              {visible.map((r, i) => {
+              {shown.map((r, i) => {
                 const isEditing = editing === r.id;
                 return (
                   <motion.div key={r.id} layout
@@ -332,6 +391,32 @@ function RunsInner() {
           )}
         </div>
 
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between gap-4 pt-1">
+              <span className="mono text-[11.5px] dimmer">
+                {pageSafe * PAGE_SIZE + 1}–{Math.min((pageSafe + 1) * PAGE_SIZE, visible.length)} of {visible.length}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={pageSafe === 0}
+                  className="p-1.5 rounded-[7px] border hairline interactive hover:bg-white/[0.05] disabled:opacity-25 disabled:cursor-not-allowed"
+                  aria-label="previous page"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="mono text-[11.5px] dim px-2">{pageSafe + 1} / {pageCount}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={pageSafe >= pageCount - 1}
+                  className="p-1.5 rounded-[7px] border hairline interactive hover:bg-white/[0.05] disabled:opacity-25 disabled:cursor-not-allowed"
+                  aria-label="next page"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         {/* right rail */}
         <div className="grid gap-4 xl:sticky xl:top-24">
           {runs && runs.length > 0 && <WorkspaceStats runs={runs} />}
@@ -382,5 +467,11 @@ function Col({ label, value, accent }: { label: string; value: string; accent?: 
 }
 
 export default function Runs() {
-  return <AuthGate><RunsInner /></AuthGate>;
+  return (
+    <AuthGate>
+      <Suspense fallback={<div className="min-h-screen" />}>
+        <RunsInner />
+      </Suspense>
+    </AuthGate>
+  );
 }

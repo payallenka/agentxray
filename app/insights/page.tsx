@@ -144,13 +144,19 @@ function InsightsInner() {
                       key={o.category}
                       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.35, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
-                      className="rounded-[9px] border hairline p-4"
+                      className="rounded-[9px] border hairline p-4 hover:border-[var(--line-strong)] interactive"
                     >
                       <div className="flex items-start justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <Link
+                          href={`/runs?finding=${o.category}`}
+                          className="flex items-center gap-3 min-w-0 group"
+                        >
                           <Badge tone={SEV_TONE[o.severity]}>{o.severity.toUpperCase()}</Badge>
-                          <span className="text-[14.5px]">{o.label}</span>
-                        </div>
+                          <span className="text-[14.5px] group-hover:text-[var(--accent-soft)] interactive">
+                            {o.label}
+                          </span>
+                          <ArrowRight size={13} className="dimmer opacity-0 group-hover:opacity-100 interactive" />
+                        </Link>
                         <div className="flex items-center gap-4 mono text-[12px] shrink-0">
                           {o.usd > 0 && <span className="text-[var(--critical)]">{usd(o.usd)}</span>}
                           {o.ms > 0 && <span className="text-[var(--warn)]">{ms(o.ms)}</span>}
@@ -192,8 +198,14 @@ function InsightsInner() {
                   </thead>
                   <tbody>
                     {flows.map((f, i) => (
-                      <tr key={f.name} className={i % 2 ? "bg-white/[0.015]" : ""}>
-                        <td className="px-3 py-2.5 mono">{f.name}</td>
+                      <tr key={f.name} className={cn("group", i % 2 ? "bg-white/[0.015]" : "", "hover:bg-white/[0.04] interactive")}>
+                        <td className="px-3 py-2.5 mono">
+                          <Link href={`/runs?workflow=${encodeURIComponent(f.name)}`}
+                                className="hover:text-[var(--accent-soft)] interactive inline-flex items-center gap-1.5">
+                            {f.name}
+                            <ArrowRight size={11} className="dimmer opacity-0 group-hover:opacity-100" />
+                          </Link>
+                        </td>
                         <td className="px-3 py-2.5 mono dim">{f.runs}</td>
                         <td className="px-3 py-2.5 mono">{usd(f.costUsd)}</td>
                         <td className="px-3 py-2.5 mono"
@@ -241,9 +253,12 @@ function InsightsInner() {
               </Card>
             )}
 
-            <Link href="/runs" className="mono text-[12px] text-[var(--accent-soft)] hover:underline inline-flex items-center gap-1.5">
-              browse individual runs <ArrowRight size={12} />
-            </Link>
+            <div className="mono text-[11.5px] dimmer">
+              Click any opportunity or workflow above to see the runs behind it —{" "}
+              <Link href="/runs" className="text-[var(--accent-soft)] hover:underline">
+                or browse them all
+              </Link>.
+            </div>
           </>
         )}
       </div>
