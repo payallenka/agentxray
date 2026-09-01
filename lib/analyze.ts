@@ -331,9 +331,18 @@ export function dataFlowCoverage(spans: Span[], g: Graph): number {
 }
 
 /** Below this, "unreachable" means we could not see the wiring, not that the
- *  work was wasted. Reporting dead branches from that would accuse the most
- *  expensive span in the run on no evidence. */
+ *  work was wasted. */
 export const MIN_DATAFLOW_COVERAGE = 0.3;
+
+/**
+ * A ceiling on what dead-branch analysis is allowed to claim. If walking back
+ * from the answer leaves more than half the run's spend unreachable, the far
+ * likelier explanation is that the graph is incomplete — steps passing
+ * structured results rather than quoted text — not that the agent threw away
+ * most of its work. An agent burning 87% of its spend on an unused planner
+ * would be catastrophically broken in ways nobody needs this tool to notice.
+ */
+export const MAX_CREDIBLE_DEAD_SHARE = 0.5;
 
 export function deadBranches(spans: Span[], g: Graph, exclude = new Set<string>()) {
   if (!spans.length) return [];
@@ -446,7 +455,7 @@ export function analyze(trace: Trace): Analysis & { graph: Graph; slack: Map<str
   const chargedToLoops = new Set(
     loops.flatMap((l) => l.members.slice(1).map((m) => m.id)),
   );
-  const dead = deadBranches(spans, g, chargedToLoops);
+  const deadRaw = deadBranches(spans, g, chargedToLoops);
   const par = missedParallelism(spans, g, chargedToLoops);
 
   const totals = {
@@ -512,7 +521,25 @@ export function analyze(trace: Trace): Analysis & { graph: Graph; slack: Map<str
   }
 
   const coverage = dataFlowCoverage(spans, g);
-  if (coverage < MIN_DATAFLOW_COVERAGE && spans.length > 3) {
+  const deadShare = totals.costUsd ? deadRaw.reduce((a, s) => a + (s.costUsd ?? 0), 0) / totals.costUsd : 0;
+  const deadNotCredible = deadShare > MAX_CREDIBLE_DEAD_SHARE;
+
+  if (deadNotCredible) {
+    findings.push({
+      id: "dataflow-incomplete",
+      severity: "info",
+      title: "Dead-branch analysis withheld — the result was not credible",
+      detail:
+        `Walking back from the answer left ${Math.round(deadShare * 100)}% of this run's spend ` +
+        `unreachable, including its most expensive step. The likelier explanation is an ` +
+        `incomplete picture of how data moved — steps passing structured results, ids or typed ` +
+        `envelopes rather than quoting text — than an agent that discarded most of its own work. ` +
+        `The finding is withheld rather than shown, because acting on it would mean deleting ` +
+        `work that is almost certainly load-bearing. Cost, timing, critical path and loop ` +
+        `findings are unaffected.`,
+      spanIds: [],
+    });
+  } else if (coverage < MIN_DATAFLOW_COVERAGE && spans.length > 3) {
     findings.push({
       id: "dataflow-unreadable",
       severity: "info",
@@ -527,6 +554,7 @@ export function analyze(trace: Trace): Analysis & { graph: Graph; slack: Map<str
     });
   }
 
+  const dead = deadNotCredible ? [] : deadRaw;
   const deadUsd = dead.reduce((a, s) => a + (s.costUsd ?? 0), 0);
   if (dead.length) {
     findings.push({
