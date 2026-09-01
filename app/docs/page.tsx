@@ -3,8 +3,8 @@ import { ArrowRight } from "lucide-react";
 import { CriticalPathDiagram, ContextGrowthDiagram, PipelineDiagram } from "@/components/Diagrams";
 
 export const metadata = {
-  title: "Reading the analysis — Costpath",
-  description: "What every number, chart and finding in Costpath means.",
+  title: "Reading the analysis — Agent X-Ray",
+  description: "What every number, chart and finding in Agent X-Ray means.",
 };
 
 const H1 = ({ children }: { children: React.ReactNode }) => (
@@ -62,7 +62,7 @@ export default function Docs() {
       <div className="eyebrow">Reference</div>
       <H1>Reading the analysis</H1>
       <P>
-        Every chart and number in Costpath, and how to interpret it. If the vocabulary is new,
+        Every chart and number in Agent X-Ray, and how to interpret it. If the vocabulary is new,
         read{" "}
         <Link href="/docs/start-here" className="text-[var(--accent-soft)] hover:underline">
           Start here

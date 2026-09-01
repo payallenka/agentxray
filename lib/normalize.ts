@@ -237,7 +237,7 @@ function fromGeneric(doc: unknown) {
     inputPreview: asStr(s.inputPreview ?? s.input),
     outputPreview: asStr(s.outputPreview ?? s.output),
   }));
-  return finalize(raw, "Costpath span format", String((doc as Record<string, unknown>)?.runName ?? "agent run"));
+  return finalize(raw, "Agent X-Ray span format", String((doc as Record<string, unknown>)?.runName ?? "agent run"));
 }
 
 export function normalize(input: string): Trace {

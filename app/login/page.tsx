@@ -66,7 +66,7 @@ function LoginInner() {
       {/* pitch side */}
       <div className="hidden lg:flex flex-col justify-between p-12 border-r hairline">
         <Link href="/" className="font-semibold tracking-tight hover:opacity-80 transition">
-          Costpath
+          Agent X-Ray
         </Link>
 
         <div className="max-w-md">
@@ -99,7 +99,7 @@ function LoginInner() {
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           <Link href="/" className="lg:hidden font-semibold tracking-tight block mb-8">
-            Costpath
+            Agent X-Ray
           </Link>
 
           <h1 className="text-2xl font-semibold tracking-tight">

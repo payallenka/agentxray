@@ -1,6 +1,6 @@
 # Integrations
 
-Costpath analyses a **complete** agent run. That shapes every integration here:
+Agent X-Ray analyses a **complete** agent run. That shapes every integration here:
 a normal OTLP exporter ships spans in batches as they finish, which would
 deliver half a run at a time and make critical-path and dead-branch analysis
 meaningless. Anything that sends data must send a whole trace, once.
@@ -18,7 +18,7 @@ them:
 curl -s "https://cloud.langfuse.com/api/public/traces/$TRACE_ID" \
      -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
 | curl -s -X POST "$COSTPATH/api/ingest" \
-     -H "Authorization: Bearer $COSTPATH_API_KEY" \
+     -H "Authorization: Bearer $AGENTXRAY_API_KEY" \
      -H "content-type: application/json" --data @-
 ```
 
@@ -26,19 +26,19 @@ Best when you cannot or should not modify the application.
 
 ## 2 · OpenTelemetry exporter (recommended)
 
-[`python/costpath_exporter.py`](python/costpath_exporter.py) is a drop-in
+[`python/agentxray_exporter.py`](python/agentxray_exporter.py) is a drop-in
 `SpanExporter`. It buffers spans by trace id and posts the whole trace once its
 root span ends.
 
 ```python
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from costpath_exporter import CostpathExporter
+from agentxray_exporter import AgentXRayExporter
 
 provider.add_span_processor(
     SimpleSpanProcessor(
-        CostpathExporter(
-            endpoint=os.environ["COSTPATH_ENDPOINT"],
-            api_key=os.environ["COSTPATH_API_KEY"],
+        AgentXRayExporter(
+            endpoint=os.environ["AGENTXRAY_ENDPOINT"],
+            api_key=os.environ["AGENTXRAY_API_KEY"],
             service_name="support-agent",
             redact=True,        # strip prompt and completion text before sending
         )

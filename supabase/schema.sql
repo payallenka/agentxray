@@ -1,4 +1,4 @@
--- Costpath · multi-tenant schema
+-- Agent X-Ray · multi-tenant schema
 -- Tenant isolation is enforced by Row Level Security, not by application code.
 
 create extension if not exists pgcrypto;
