@@ -1,0 +1,69 @@
+# Keeps a deployed Agent X-Ray fed with new traces, with no server to run.
+#
+# GitHub-hosted runners execute this on a schedule; the job pulls new traces
+# from Langfuse and posts them to the ingest endpoint. Nothing in the traced
+# service changes, and there is nothing to keep alive between runs — the cursor
+# lives in the workflow cache.
+#
+# Required repository secrets:
+#   LANGFUSE_PUBLIC_KEY  LANGFUSE_SECRET_KEY  LANGFUSE_BASE_URL
+#   AGENTXRAY_ENDPOINT   AGENTXRAY_API_KEY
+
+name: Sync traces from Langfuse
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"        # every 15 minutes
+  workflow_dispatch:               # and on demand
+    inputs:
+      limit:
+        description: "How many recent traces to consider"
+        default: "50"
+      min_spans:
+        description: "Skip traces smaller than this"
+        default: "4"
+      force:
+        description: "Re-send traces already seen"
+        type: boolean
+        default: false
+
+concurrency:
+  group: langfuse-sync             # never two syncs at once
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet requests
+
+      # the cursor stops every run re-sending the same traces; ingest also
+      # deduplicates server-side, so a cache miss is harmless
+      - name: Restore sync cursor
+        uses: actions/cache@v4
+        with:
+          path: .agentxray-sync.json
+          key: agentxray-sync-${{ github.run_id }}
+          restore-keys: agentxray-sync-
+
+      - name: Sync
+        env:
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_BASE_URL:   ${{ secrets.LANGFUSE_BASE_URL }}
+          AGENTXRAY_ENDPOINT:  ${{ secrets.AGENTXRAY_ENDPOINT }}
+          AGENTXRAY_API_KEY:   ${{ secrets.AGENTXRAY_API_KEY }}
+          AGENTXRAY_SYNC_STATE: .agentxray-sync.json
+        run: |
+          python integrations/python/langfuse_sync.py \
+            --limit "${{ inputs.limit || 50 }}" \
+            --min-spans "${{ inputs.min_spans || 4 }}" \
+            --sleep 1.0 \
+            ${{ inputs.force == 'true' && '--force' || '' }}
