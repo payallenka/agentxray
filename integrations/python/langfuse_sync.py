@@ -89,10 +89,22 @@ def lf_get(path: str, *, retries: int = 6, **params) -> Any:
     raise RuntimeError(f"gave up on {path} after {retries} attempts")
 
 
-def forward(name: str, observations: list, *, redact: bool, force: bool) -> Optional[dict]:
+def forward(trace: dict, observations: list, *, redact: bool, force: bool) -> Optional[dict]:
+    name = trace.get("name") or "trace"
+    # trace-level fields are what make clustering by conversation possible;
+    # sending only the observations throws that away
+    payload = {
+        "name": name,
+        "observations": observations,
+        "sessionId": trace.get("sessionId"),
+        "userId": trace.get("userId"),
+        "environment": trace.get("environment"),
+        "release": trace.get("release"),
+        "tags": trace.get("tags"),
+    }
     r = requests.post(
         f"{AX}/api/ingest",
-        json={"name": name, "observations": observations},
+        json={k: v for k, v in payload.items() if v is not None},
         headers={"Authorization": f"Bearer {AX_KEY}"},
         params={"redact": "true" if redact else "false",
                 **({"force": "true"} if force else {})},
@@ -183,8 +195,7 @@ def sync_once(args, state: dict) -> tuple[int, int, int]:
             skipped += 1
             continue
 
-        body = forward(full.get("name") or name, obs,
-                       redact=not args.no_redact, force=args.force)
+        body = forward(full, obs, redact=not args.no_redact, force=args.force)
         if body is None:
             continue
 
