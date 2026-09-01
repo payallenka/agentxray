@@ -1,0 +1,186 @@
+"""
+Agent X-Ray ← Langfuse sync.
+
+Zero-touch integration. If a service already writes traces to Langfuse, this
+reads them and forwards them for analysis — no code changes, no dependency, no
+exporter inside the application. Nothing in the traced service is modified, so
+nothing to survive a branch switch or a redeploy.
+
+    # one-off backfill of recent history
+    python langfuse_sync.py --limit 50 --min-spans 4
+
+    # keep following: poll for new traces every 60s
+    python langfuse_sync.py --watch --interval 60
+
+Environment:
+    LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL
+    AGENTXRAY_ENDPOINT   default http://localhost:3000
+    AGENTXRAY_API_KEY    issue one from the workspace sidebar
+
+A cursor is kept in ~/.agentxray-sync.json so a restart does not re-send
+everything; duplicates are collapsed server-side regardless.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Any, Optional
+
+import requests
+
+LF_HOST = (os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST")
+           or "https://cloud.langfuse.com").rstrip("/")
+LF_AUTH = (os.getenv("LANGFUSE_PUBLIC_KEY", ""), os.getenv("LANGFUSE_SECRET_KEY", ""))
+AX = (os.getenv("AGENTXRAY_ENDPOINT") or "http://localhost:3000").rstrip("/")
+AX_KEY = os.getenv("AGENTXRAY_API_KEY", "")
+
+STATE = Path(os.getenv("AGENTXRAY_SYNC_STATE", Path.home() / ".agentxray-sync.json"))
+
+
+def load_state() -> dict:
+    try:
+        return json.loads(STATE.read_text())
+    except Exception:
+        return {"seen": []}
+
+
+def save_state(state: dict) -> None:
+    state["seen"] = state.get("seen", [])[-2000:]     # bounded
+    try:
+        STATE.write_text(json.dumps(state))
+    except Exception:
+        pass
+
+
+def lf_get(path: str, *, retries: int = 5, **params) -> Any:
+    """Langfuse Cloud rate-limits reads; back off rather than dropping traces."""
+    delay = 1.0
+    for attempt in range(retries):
+        r = requests.get(f"{LF_HOST}/api/public/{path}", auth=LF_AUTH,
+                         params=params, timeout=30)
+        if r.status_code == 429:
+            wait = float(r.headers.get("Retry-After") or delay)
+            print(f"    rate limited, waiting {wait:.0f}s", flush=True)
+            time.sleep(wait)
+            delay = min(delay * 2, 30)
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise RuntimeError(f"gave up on {path}")
+
+
+def forward(name: str, observations: list, *, redact: bool, force: bool) -> Optional[dict]:
+    r = requests.post(
+        f"{AX}/api/ingest",
+        json={"name": name, "observations": observations},
+        headers={"Authorization": f"Bearer {AX_KEY}"},
+        params={"redact": "true" if redact else "false",
+                **({"force": "true"} if force else {})},
+        timeout=30,
+    )
+    try:
+        body = r.json()
+    except Exception:
+        body = {"error": r.text[:200]}
+    if r.status_code >= 400:
+        print(f"  ✗ {name[:44]:<46} {r.status_code} {str(body.get('error'))[:60]}", flush=True)
+        return None
+    return body
+
+
+def sync_once(args, state: dict) -> tuple[int, int, int]:
+    seen = set(state.get("seen", []))
+    listing = lf_get("traces", limit=args.limit, page=args.page)
+    traces = listing.get("data", [])
+
+    ok = dupe = skipped = 0
+
+    for t in traces:
+        tid = t.get("id")
+        name = (t.get("name") or "trace")[:44]
+
+        if tid in seen and not args.force:
+            skipped += 1
+            continue
+
+        time.sleep(args.sleep)
+        full = lf_get(f"traces/{tid}")
+        obs = full.get("observations") or []
+
+        if len(obs) < args.min_spans:
+            seen.add(tid)
+            skipped += 1
+            continue
+
+        body = forward(full.get("name") or name, obs,
+                       redact=not args.no_redact, force=args.force)
+        if body is None:
+            continue
+
+        seen.add(tid)
+        if body.get("deduplicated"):
+            dupe += 1
+        else:
+            ok += 1
+            print(f"  ✓ {name:<46} {str(body.get('spans')):>3} spans  "
+                  f"${body.get('costUsd', 0):.4f}  "
+                  f"{(body.get('wasteShare') or 0) * 100:>3.0f}% recoverable", flush=True)
+
+    state["seen"] = list(seen)
+    return ok, dupe, skipped
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--limit", type=int, default=20)
+    ap.add_argument("--page", type=int, default=1)
+    ap.add_argument("--min-spans", type=int, default=3,
+                    help="skip traces smaller than this — tiny runs have nothing to find")
+    ap.add_argument("--sleep", type=float, default=1.0, help="pause between trace fetches")
+    ap.add_argument("--no-redact", action="store_true", help="keep prompt and completion text")
+    ap.add_argument("--force", action="store_true", help="re-send even if already seen")
+    ap.add_argument("--watch", action="store_true", help="poll continuously")
+    ap.add_argument("--interval", type=float, default=60.0, help="seconds between polls in --watch")
+    args = ap.parse_args()
+
+    for label, val in (("LANGFUSE_PUBLIC_KEY", LF_AUTH[0]),
+                       ("LANGFUSE_SECRET_KEY", LF_AUTH[1]),
+                       ("AGENTXRAY_API_KEY", AX_KEY)):
+        if not val:
+            print(f"missing {label}", file=sys.stderr)
+            return 1
+
+    print(f"langfuse   {LF_HOST}")
+    print(f"agentxray  {AX}")
+    print(f"cursor     {STATE}")
+    print(f"redaction  {'off — prompt text will be stored' if args.no_redact else 'on'}\n")
+
+    state = load_state()
+
+    if not args.watch:
+        ok, dupe, skipped = sync_once(args, state)
+        save_state(state)
+        print(f"\ningested {ok} · duplicate {dupe} · skipped {skipped}")
+        return 0
+
+    print(f"watching, every {args.interval:.0f}s — ctrl-c to stop\n")
+    try:
+        while True:
+            ok, dupe, skipped = sync_once(args, state)
+            save_state(state)
+            if ok:
+                print(f"  … {ok} new", flush=True)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        save_state(state)
+        print("\nstopped")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
