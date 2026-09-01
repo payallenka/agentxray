@@ -57,21 +57,36 @@ def save_state(state: dict) -> None:
         pass
 
 
-def lf_get(path: str, *, retries: int = 5, **params) -> Any:
-    """Langfuse Cloud rate-limits reads; back off rather than dropping traces."""
+def lf_get(path: str, *, retries: int = 6, **params) -> Any:
+    """Langfuse Cloud rate-limits reads and occasionally times out. A long
+    sync must survive both — losing a 25-minute job to one dropped packet is
+    not acceptable."""
     delay = 1.0
     for attempt in range(retries):
-        r = requests.get(f"{LF_HOST}/api/public/{path}", auth=LF_AUTH,
-                         params=params, timeout=30)
+        try:
+            r = requests.get(f"{LF_HOST}/api/public/{path}", auth=LF_AUTH,
+                             params=params, timeout=30)
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            print(f"    network fault ({type(exc).__name__}), retrying in {delay:.0f}s", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
+            continue
+
         if r.status_code == 429:
             wait = float(r.headers.get("Retry-After") or delay)
             print(f"    rate limited, waiting {wait:.0f}s", flush=True)
             time.sleep(wait)
             delay = min(delay * 2, 30)
             continue
+        if r.status_code >= 500:
+            print(f"    upstream {r.status_code}, retrying in {delay:.0f}s", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
+            continue
+
         r.raise_for_status()
         return r.json()
-    raise RuntimeError(f"gave up on {path}")
+    raise RuntimeError(f"gave up on {path} after {retries} attempts")
 
 
 def forward(name: str, observations: list, *, redact: bool, force: bool) -> Optional[dict]:
@@ -137,7 +152,8 @@ def sync_once(args, state: dict) -> tuple[int, int, int]:
     traces = list_traces(args)
     print(f"  {len(traces)} candidate traces\n")
 
-    ok = dupe = skipped = 0
+    ok = dupe = skipped = failed = 0
+    processed = 0
 
     for t in traces:
         tid = t.get("id")
@@ -147,8 +163,19 @@ def sync_once(args, state: dict) -> tuple[int, int, int]:
             skipped += 1
             continue
 
-        time.sleep(args.sleep)
-        full = lf_get(f"traces/{tid}")
+        # checkpoint, so a crash costs one batch rather than the whole run
+        processed += 1
+        if processed % 25 == 0:
+            state["seen"] = list(seen)
+            save_state(state)
+
+        try:
+            time.sleep(args.sleep)
+            full = lf_get(f"traces/{tid}")
+        except Exception as exc:
+            print(f"  ✗ {name:<46} unreachable: {type(exc).__name__}", flush=True)
+            failed += 1
+            continue
         obs = full.get("observations") or []
 
         if len(obs) < args.min_spans:
@@ -171,6 +198,8 @@ def sync_once(args, state: dict) -> tuple[int, int, int]:
                   f"{(body.get('wasteShare') or 0) * 100:>3.0f}% recoverable", flush=True)
 
     state["seen"] = list(seen)
+    if failed:
+        print(f"\n  {failed} trace(s) could not be fetched and were left for next time")
     return ok, dupe, skipped
 
 
