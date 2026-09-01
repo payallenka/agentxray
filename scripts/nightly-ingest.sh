@@ -43,7 +43,8 @@ fi
 
 echo "── $(date '+%Y-%m-%d %H:%M') ─────────────────────────────"
 python3 integrations/python/langfuse_sync.py \
-  --limit "${LIMIT:-100}" \
+  ${SINCE:+--since "$SINCE"} \
+  ${MAX:+--max-traces "$MAX"} \
   --min-spans "${MIN_SPANS:-4}" \
   --sleep 1.0 \
   "$@"

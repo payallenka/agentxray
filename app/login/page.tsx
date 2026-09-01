@@ -10,7 +10,7 @@ type Mode = "signin" | "signup";
 function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/runs";
+  const next = params.get("next") || "/insights";
   const sb = supabase();
 
   const [mode, setMode] = useState<Mode>("signin");

@@ -93,10 +93,49 @@ def forward(name: str, observations: list, *, redact: bool, force: bool) -> Opti
     return body
 
 
+def list_traces(args) -> list:
+    """Walk every page. The listing endpoint is cheap; the per-trace fetch is
+    not, so filter here — by name and by date — rather than downloading
+    thousands of traces to discard most of them."""
+    out: list = []
+    page = args.page
+    per_page = 100
+
+    base: dict = {"limit": per_page}
+    if args.since:
+        base["fromTimestamp"] = args.since
+    names = args.name or [None]
+
+    for nm in names:
+        page = args.page
+        while True:
+            params = dict(base)
+            if nm:
+                params["name"] = nm
+            listing = lf_get("traces", page=page, **params)
+            batch = listing.get("data", [])
+            out.extend(batch)
+
+            meta = listing.get("meta") or {}
+            total_pages = meta.get("totalPages") or 1
+            if page == args.page:
+                label = f"name={nm}" if nm else "all names"
+                print(f"  {label}: {meta.get('totalItems', '?')} traces across {total_pages} pages")
+
+            if args.max_traces and len(out) >= args.max_traces:
+                return out[: args.max_traces]
+            if page >= total_pages or not batch:
+                break
+            page += 1
+            time.sleep(args.sleep / 2)
+
+    return out
+
+
 def sync_once(args, state: dict) -> tuple[int, int, int]:
     seen = set(state.get("seen", []))
-    listing = lf_get("traces", limit=args.limit, page=args.page)
-    traces = listing.get("data", [])
+    traces = list_traces(args)
+    print(f"  {len(traces)} candidate traces\n")
 
     ok = dupe = skipped = 0
 
@@ -137,8 +176,14 @@ def sync_once(args, state: dict) -> tuple[int, int, int]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=20)
-    ap.add_argument("--page", type=int, default=1)
+    ap.add_argument("--page", type=int, default=1, help="first page to read")
+    ap.add_argument("--max-traces", type=int, default=0,
+                    help="stop after this many candidates (0 = every page)")
+    ap.add_argument("--name", action="append",
+                    help="only this trace name; repeatable. Filters server-side, "
+                         "so hundreds of tiny runs are never fetched at all")
+    ap.add_argument("--since", type=str, default=None,
+                    help="ISO timestamp, e.g. 2026-08-25T00:00:00Z")
     ap.add_argument("--min-spans", type=int, default=3,
                     help="skip traces smaller than this — tiny runs have nothing to find")
     ap.add_argument("--sleep", type=float, default=1.0, help="pause between trace fetches")

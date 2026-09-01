@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/analyze", "/runs"];
+const PROTECTED = ["/analyze", "/runs", "/insights"];
 const AUTH_PAGES = ["/login"];
 
 /**
@@ -55,7 +55,7 @@ export async function updateSession(request: NextRequest) {
   if (user && isAuthPage) {
     const to = request.nextUrl.clone();
     const next = request.nextUrl.searchParams.get("next");
-    to.pathname = next && next.startsWith("/") ? next : "/runs";
+    to.pathname = next && next.startsWith("/") ? next : "/insights";
     to.search = "";
     return copyCookies(response, NextResponse.redirect(to));
   }
