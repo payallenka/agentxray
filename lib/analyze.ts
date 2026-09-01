@@ -536,6 +536,50 @@ export function analyze(trace: Trace): Analysis & { graph: Graph; slack: Map<str
     });
   }
 
+  // $0.00 can mean "efficient" or "unmeasured", and those are very different
+  // conclusions. Never let a reader infer the first when the truth is the
+  // second.
+  const llmSpans = spans.filter((s) => s.kind === "llm");
+  const unpriced = llmSpans.filter((s) => !s.costUsd && !s.inputTokens && !s.outputTokens);
+
+  if (llmSpans.length === 0 && totals.costUsd === 0) {
+    findings.push({
+      id: "no-model-calls",
+      severity: "warn",
+      title: "No model calls recorded, so this run cannot be priced",
+      detail:
+        `This trace contains ${totals.spanCount} spans but no LLM generations, so every cost ` +
+        `figure is $0.00 by absence rather than by efficiency. Timing analysis — critical path, ` +
+        `slack, parallelism, dead branches — is unaffected, because it comes from timestamps. ` +
+        `To recover cost and context-re-send analysis, record model calls as generations: a ` +
+        `GENERATION observation in Langfuse, or a span carrying gen_ai.request.model and ` +
+        `gen_ai.usage.* under OpenTelemetry.`,
+      spanIds: [],
+    });
+  } else if (llmSpans.length > 0 && unpriced.length === llmSpans.length) {
+    findings.push({
+      id: "no-usage-data",
+      severity: "warn",
+      title: "Model calls report no token usage, so cost cannot be computed",
+      detail:
+        `All ${llmSpans.length} model call${llmSpans.length > 1 ? "s" : ""} reported zero tokens ` +
+        `and no model name, so cost here is $0.00 by absence, not by efficiency. Timing findings ` +
+        `are unaffected. Record gen_ai.usage.input_tokens and gen_ai.usage.output_tokens, or the ` +
+        `usage field on a Langfuse generation, to recover cost analysis.`,
+      spanIds: unpriced.map((s) => s.id),
+    });
+  } else if (unpriced.length > 0) {
+    findings.push({
+      id: "partial-usage-data",
+      severity: "info",
+      title: `${unpriced.length} of ${llmSpans.length} model calls report no token usage`,
+      detail:
+        `Cost for this run is understated: those calls count as $0.00 because the trace carries ` +
+        `no usage for them, not because they were free.`,
+      spanIds: unpriced.map((s) => s.id),
+    });
+  }
+
   const rank = { critical: 0, warn: 1, info: 2 } as const;
   findings.sort(
     (a, b) =>

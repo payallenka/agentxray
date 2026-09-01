@@ -161,7 +161,19 @@ function fromLangfuse(doc: Record<string, unknown>) {
   const obs = (doc.observations ?? doc.data) as Record<string, unknown>[];
   if (!Array.isArray(obs) || !obs.length || !obs[0].startTime) return null;
   const raw = obs.map((o) => {
-    const usage = (o.usage ?? o.usageDetails ?? {}) as Record<string, unknown>;
+    // Langfuse has accumulated several generations of usage fields. Read them
+    // all: usage{} is the classic shape, usageDetails{} the newer one, and the
+    // flat promptTokens/completionTokens are what some SDK versions populate.
+    const usage = (o.usage ?? {}) as Record<string, unknown>;
+    const details = (o.usageDetails ?? {}) as Record<string, unknown>;
+    const costs = (o.costDetails ?? {}) as Record<string, unknown>;
+    const firstNum = (...vals: unknown[]) => {
+      for (const v of vals) {
+        const n = num(v);
+        if (n != null && n > 0) return n;
+      }
+      return undefined;
+    };
     return {
       id: String(o.id),
       parentId: (o.parentObservationId as string) ?? null,
@@ -172,10 +184,13 @@ function fromLangfuse(doc: Record<string, unknown>) {
       status: o.level === "ERROR" ? ("error" as const) : ("ok" as const),
       error: asStr(o.statusMessage, 400),
       model: o.model as string,
-      inputTokens: num(usage.input ?? usage.promptTokens ?? usage.input_tokens),
-      outputTokens: num(usage.output ?? usage.completionTokens ?? usage.output_tokens),
-      cachedTokens: num(usage.cache_read_input_tokens),
-      costUsd: num(o.calculatedTotalCost ?? o.totalCost),
+      inputTokens: firstNum(usage.input, usage.promptTokens, usage.input_tokens,
+                            details.input, o.promptTokens),
+      outputTokens: firstNum(usage.output, usage.completionTokens, usage.output_tokens,
+                             details.output, o.completionTokens),
+      cachedTokens: firstNum(usage.cache_read_input_tokens, details.cache_read_input_tokens,
+                             details.cached_tokens),
+      costUsd: firstNum(o.calculatedTotalCost, o.totalCost, o.totalPrice, costs.total),
       inputPreview: asStr(o.input),
       outputPreview: asStr(o.output),
     };
