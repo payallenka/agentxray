@@ -7,7 +7,8 @@ import { ArrowRight, Clock } from "lucide-react";
 import AppShell, { SHELL } from "@/components/AppShell";
 import AuthGate from "@/components/AuthGate";
 import { supabase } from "@/lib/supabase/client";
-import { byWorkflow, dailySeries, opportunities, type StoredRun } from "@/lib/aggregate";
+import { availableDimensions, byWorkflow, dailySeries, DIMENSIONS, opportunities,
+         type Dimension, type StoredRun } from "@/lib/aggregate";
 import { ms, usd } from "@/lib/pricing";
 import { Badge, Card, CardLabel, CountUp, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -25,6 +26,7 @@ function InsightsInner() {
   const sb = supabase();
   const [all, setAll] = useState<StoredRun[] | null>(null);
   const [win, setWin] = useState<(typeof WINDOWS)[number]["key"]>("7d");
+  const [dim, setDim] = useState<Dimension>("workflow");
 
   const load = useCallback(async () => {
     if (!sb) { setAll([]); return; }
@@ -47,7 +49,11 @@ function InsightsInner() {
   }, [all, win]);
 
   const opps = useMemo(() => opportunities(runs), [runs]);
-  const flows = useMemo(() => byWorkflow(runs), [runs]);
+  const dims = useMemo(() => availableDimensions(runs), [runs]);
+  const flows = useMemo(() => byWorkflow(runs, dim), [runs, dim]);
+
+  // fall back if the chosen dimension is absent from the current window
+  useEffect(() => { if (!dims.includes(dim)) setDim("workflow"); }, [dims, dim]);
   const series = useMemo(() => dailySeries(runs), [runs]);
 
   const cost = runs.reduce((a, r) => a + r.cost_usd, 0);
@@ -184,12 +190,40 @@ function InsightsInner() {
 
             {/* where it happens */}
             <Card className="p-6">
-              <CardLabel>By workflow</CardLabel>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <CardLabel>Grouped</CardLabel>
+                  <p className="prose-dim text-[12.5px] mt-1.5">
+                    {dim === "session"
+                      ? "One row per conversation, not per turn — a turn is not the unit anyone thinks in."
+                      : dim === "user"
+                      ? "One row per end user."
+                      : dim === "environment"
+                      ? "One row per environment, so development traffic does not distort production."
+                      : "One row per workflow."}
+                  </p>
+                </div>
+                {dims.length > 1 && (
+                  <div className="flex items-center gap-1 p-1 rounded-[9px] bg-[var(--surface-2)] border hairline">
+                    {DIMENSIONS.filter((d) => dims.includes(d.key)).map((d) => (
+                      <button
+                        key={d.key} onClick={() => setDim(d.key)}
+                        className={cn("text-[12px] px-2.5 py-1 rounded-[6px] interactive",
+                          dim === d.key ? "bg-white/[0.09] text-[var(--ink)]" : "dim hover:text-[var(--ink)]")}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="overflow-x-auto mt-4">
                 <table className="w-full text-[13px] border-collapse">
                   <thead>
                     <tr className="border-b hairline">
-                      {["Workflow", "Runs", "Cost", "Recoverable", "Avg", "p95", "Biggest issue"].map((h) => (
+                      {[DIMENSIONS.find((d) => d.key === dim)!.label,
+                        dim === "session" ? "Turns" : "Runs",
+                        "Cost", "Recoverable", "Avg", "p95", "Biggest issue"].map((h) => (
                         <th key={h} className="text-left px-3 py-2 mono text-[10px] uppercase tracking-[0.12em] dimmer font-normal whitespace-nowrap">
                           {h}
                         </th>
@@ -200,9 +234,9 @@ function InsightsInner() {
                     {flows.map((f, i) => (
                       <tr key={f.name} className={cn("group", i % 2 ? "bg-white/[0.015]" : "", "hover:bg-white/[0.04] interactive")}>
                         <td className="px-3 py-2.5 mono">
-                          <Link href={`/runs?workflow=${encodeURIComponent(f.name)}`}
+                          <Link href={`/runs?${dim}=${encodeURIComponent(f.name)}`}
                                 className="hover:text-[var(--accent-soft)] interactive inline-flex items-center gap-1.5">
-                            {f.name}
+                            <span className="truncate max-w-[26ch] inline-block align-bottom">{f.name}</span>
                             <ArrowRight size={11} className="dimmer opacity-0 group-hover:opacity-100" />
                           </Link>
                         </td>
@@ -228,6 +262,12 @@ function InsightsInner() {
             </Card>
 
             {/* trend */}
+            {flows.length > 12 && (
+              <div className="mono text-[11px] dimmer -mt-3">
+                showing all {flows.length} groups — sorted by cost
+              </div>
+            )}
+
             {series.length > 1 && (
               <Card className="p-6">
                 <CardLabel>Spend per day</CardLabel>

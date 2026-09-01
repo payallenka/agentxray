@@ -58,6 +58,9 @@ function RunsInner() {
   const router = useRouter();
   const params = useSearchParams();
   const workflowFilter = params.get("workflow");
+  const sessionFilter = params.get("session");
+  const userFilter = params.get("user");
+  const envFilter = params.get("environment");
   const findingFilter = params.get("finding") as Category | null;
   const [page, setPage] = useState(0);
   const [org, setOrg] = useState<{ id: string; name: string } | null>(null);
@@ -76,13 +79,13 @@ function RunsInner() {
     if (!sb) return;
     // the analysis blob is only needed to filter by finding type
     const cols = "id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share,cp_share,finding_count,redacted,created_at"
-      + (findingFilter ? ",analysis" : "");
+      + (findingFilter || sessionFilter || userFilter || envFilter ? ",analysis" : "");
     const { data } = await sb
       .from("runs")
       .select(cols)
       .eq("org_id", orgId).order("created_at", { ascending: false }).limit(500);
     setRuns((data as unknown as RunRow[]) ?? []);
-  }, [sb, findingFilter]);
+  }, [sb, findingFilter, sessionFilter, userFilter, envFilter]);
 
   useEffect(() => {
     if (!sb) { setRuns([]); return; }
@@ -115,6 +118,12 @@ function RunsInner() {
     let list = [...(runs ?? [])];
     if (workflowFilter)
       list = list.filter((r) => r.name.replace(/\s*\(.*\)\s*$/, "").trim() === workflowFilter);
+    for (const [key, val] of [["session", sessionFilter], ["user", userFilter], ["environment", envFilter]] as const) {
+      if (!val) continue;
+      list = list.filter((r) =>
+        (r as unknown as { analysis?: { attributes?: Record<string, string> } })
+          .analysis?.attributes?.[key] === val);
+    }
     if (findingFilter)
       list = list.filter((r) =>
         ((r as unknown as { analysis?: { findings?: { id: string }[] } }).analysis?.findings ?? [])
@@ -135,14 +144,14 @@ function RunsInner() {
       name: (a, b) => a.name.localeCompare(b.name),
     };
     return list.sort(by[sort]);
-  }, [runs, q, source, waste, sort, workflowFilter, findingFilter]);
+  }, [runs, q, source, waste, sort, workflowFilter, findingFilter, sessionFilter, userFilter, envFilter]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount - 1);
   const shown = visible.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
 
   // any change to the filters puts you back on the first page
-  useEffect(() => { setPage(0); }, [q, source, waste, sort, workflowFilter, findingFilter]);
+  useEffect(() => { setPage(0); }, [q, source, waste, sort, workflowFilter, findingFilter, sessionFilter, userFilter, envFilter]);
 
   async function rename(id: string) {
     const name = draft.trim();
@@ -192,13 +201,16 @@ function RunsInner() {
             </p>
           </div>
 
-          {(workflowFilter || findingFilter) && (
+          {(workflowFilter || findingFilter || sessionFilter || userFilter || envFilter) && (
             <Card className="px-4 py-3 flex items-center justify-between gap-4 border-violet-500/30 bg-violet-500/[0.05]">
               <div className="flex items-center gap-2.5 min-w-0">
                 <Filter size={14} className="text-[var(--accent-soft)] shrink-0" />
                 <span className="text-[13.5px]">
                   {visible.length} run{visible.length === 1 ? "" : "s"}
                   {workflowFilter && <> in <span className="mono">{workflowFilter}</span></>}
+                  {sessionFilter && <> in conversation <span className="mono">{sessionFilter.slice(0, 12)}…</span></>}
+                  {userFilter && <> from <span className="mono">{userFilter}</span></>}
+                  {envFilter && <> in <span className="mono">{envFilter}</span></>}
                   {findingFilter && <> with <span className="mono">{CATEGORY_LABEL[findingFilter] ?? findingFilter}</span></>}
                 </span>
               </div>

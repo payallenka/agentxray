@@ -38,7 +38,12 @@ function classify(name: string, hint?: string): SpanKind {
 }
 
 /** Shared finishing pass: rebase timestamps, compute depth, fill costs. */
-function finalize(raw: Omit<Span, "depth" | "durationMs">[], source: string, runName: string): Trace {
+function finalize(
+  raw: Omit<Span, "depth" | "durationMs">[],
+  source: string,
+  runName: string,
+  attributes?: Record<string, string>,
+): Trace {
   if (!raw.length) throw new Error("No spans found in this payload.");
   const t0 = Math.min(...raw.map((s) => s.startMs));
   const byId = new Map(raw.map((s) => [s.id, s]));
@@ -74,7 +79,7 @@ function finalize(raw: Omit<Span, "depth" | "durationMs">[], source: string, run
   }
 
   spans.sort((a, b) => a.startMs - b.startMs || b.durationMs - a.durationMs);
-  return { source, runName, spans, totalMs: Math.max(...spans.map((s) => s.endMs)) };
+  return { source, runName, spans, totalMs: Math.max(...spans.map((s) => s.endMs)), attributes };
 }
 
 /* ---------------- OTLP / OpenTelemetry GenAI semantic conventions ---------------- */
@@ -210,7 +215,20 @@ function fromLangfuse(doc: Record<string, unknown>) {
       outputPreview: asStr(o.output),
     };
   });
-  return finalize(raw, "Langfuse export", String(doc.name ?? "langfuse trace"));
+  const attrs: Record<string, string> = {};
+  const put = (k: string, v: unknown) => {
+    if (v == null || v === "") return;
+    attrs[k] = String(v).slice(0, 120);
+  };
+  put("session", doc.sessionId ?? doc.session_id);
+  put("user", doc.userId ?? doc.user_id);
+  put("environment", doc.environment);
+  put("release", doc.release);
+  const tags = doc.tags as unknown[];
+  if (Array.isArray(tags) && tags.length) put("tags", tags.join(", "));
+
+  return finalize(raw, "Langfuse export", String(doc.name ?? "langfuse trace"),
+                  Object.keys(attrs).length ? attrs : undefined);
 }
 
 /* ---------------- Generic flat span array (our own schema) ---------------- */

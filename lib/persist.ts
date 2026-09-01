@@ -89,8 +89,9 @@ export function buildRunPayload(
       waste: serialisable.waste,
       // Map is not JSON-serialisable
       slack: Object.fromEntries((analysis as Analysis & { slack?: Map<string, number> }).slack ?? []),
-      // carried inside the JSON so dedup needs no schema migration
+      // carried inside the JSON so neither needs a schema migration
       contentHash: hash ?? null,
+      attributes: trace.attributes ?? null,
     },
   };
 }

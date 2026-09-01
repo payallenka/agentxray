@@ -28,6 +28,9 @@ export interface Trace {
   runName: string;
   spans: Span[];
   totalMs: number;
+  /** dimensions worth clustering by — session, user, environment, release.
+   *  A turn is not the unit anyone thinks in; a conversation is. */
+  attributes?: Record<string, string>;
 }
 
 export interface Finding {

@@ -117,6 +117,29 @@ export function opportunities(runs: StoredRun[]): Opportunity[] {
     .sort((a, b) => b.usd - a.usd || b.ms - a.ms || b.runs - a.runs);
 }
 
+export type Dimension = "workflow" | "session" | "user" | "environment";
+
+export const DIMENSIONS: { key: Dimension; label: string; noun: string }[] = [
+  { key: "workflow", label: "Workflow", noun: "workflow" },
+  { key: "session", label: "Conversation", noun: "session" },
+  { key: "user", label: "User", noun: "user" },
+  { key: "environment", label: "Environment", noun: "environment" },
+];
+
+/** Which dimensions this data actually has — hide selectors that would be empty. */
+export function availableDimensions(runs: StoredRun[]): Dimension[] {
+  const out: Dimension[] = ["workflow"];
+  for (const d of ["session", "user", "environment"] as const)
+    if (runs.some((r) => keyFor(r, d))) out.push(d);
+  return out;
+}
+
+function keyFor(r: StoredRun, d: Dimension): string | undefined {
+  if (d === "workflow") return r.name.replace(/\s*\(.*\)\s*$/, "").trim();
+  const a = (r.analysis as unknown as { attributes?: Record<string, string> } | undefined)?.attributes;
+  return a?.[d];
+}
+
 export interface WorkflowRow {
   name: string;
   runs: number;
@@ -128,10 +151,11 @@ export interface WorkflowRow {
   topCategory?: Category;
 }
 
-export function byWorkflow(runs: StoredRun[]): WorkflowRow[] {
+export function byWorkflow(runs: StoredRun[], dimension: Dimension = "workflow"): WorkflowRow[] {
   const acc = new Map<string, StoredRun[]>();
   for (const r of runs) {
-    const k = r.name.replace(/\s*\(.*\)\s*$/, "").trim();
+    const k = keyFor(r, dimension);
+    if (!k) continue;                      // not every run carries every dimension
     (acc.get(k) ?? acc.set(k, []).get(k)!).push(r);
   }
 
