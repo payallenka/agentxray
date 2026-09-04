@@ -14,11 +14,15 @@ import { Badge, Card, CardLabel, CountUp, Skeleton } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 const WINDOWS = [
-  { key: "24h", label: "Last 24h", hours: 24 },
-  { key: "7d", label: "Last 7 days", hours: 24 * 7 },
-  { key: "30d", label: "Last 30 days", hours: 24 * 30 },
+  { key: "3h", label: "3h", hours: 3 },
+  { key: "24h", label: "24h", hours: 24 },
+  { key: "7d", label: "7 days", hours: 24 * 7 },
+  { key: "30d", label: "30 days", hours: 24 * 30 },
   { key: "all", label: "All time", hours: 0 },
 ] as const;
+
+/** Analysis blobs are large; this bounds what one page will pull. */
+const MAX_ROWS = 2000;
 
 const SEV_TONE = { critical: "critical", warn: "warn", info: "info" } as const;
 
@@ -26,27 +30,34 @@ function InsightsInner() {
   const sb = supabase();
   const [all, setAll] = useState<StoredRun[] | null>(null);
   const [win, setWin] = useState<(typeof WINDOWS)[number]["key"]>("7d");
+  const [totalInWindow, setTotalInWindow] = useState(0);
   const [dim, setDim] = useState<Dimension>("workflow");
 
   const load = useCallback(async () => {
     if (!sb) { setAll([]); return; }
-    const { data } = await sb
+    const w = WINDOWS.find((x) => x.key === win)!;
+
+    // started_at is when the agent ran. created_at is when we imported it —
+    // windowing on that made every backfill land inside "the last 24 hours".
+    let query = sb
       .from("runs")
-      .select("id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share,finding_count,created_at,analysis")
-      .order("created_at", { ascending: false })
-      .limit(500);
+      .select("id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share," +
+              "finding_count,created_at,started_at,session_id,actor_id,environment,categories,analysis",
+              { count: "exact" })
+      .order("started_at", { ascending: false })
+      .limit(MAX_ROWS);
+
+    if (w.hours) {
+      query = query.gte("started_at", new Date(Date.now() - w.hours * 3600_000).toISOString());
+    }
+    const { data, count } = await query;
     setAll((data as StoredRun[]) ?? []);
-  }, [sb]);
+    setTotalInWindow(count ?? 0);
+  }, [sb, win]);
 
   useEffect(() => { load(); }, [load]);
 
-  const runs = useMemo(() => {
-    if (!all) return [];
-    const w = WINDOWS.find((x) => x.key === win)!;
-    if (!w.hours) return all;
-    const cutoff = Date.now() - w.hours * 3600_000;
-    return all.filter((r) => +new Date(r.created_at) >= cutoff);
-  }, [all, win]);
+  const runs = all ?? [];
 
   const opps = useMemo(() => opportunities(runs), [runs]);
   const dims = useMemo(() => availableDimensions(runs), [runs]);
@@ -62,9 +73,8 @@ function InsightsInner() {
   const clean = runs.filter((r) => r.waste_share <= 0).length;
 
   // what the window actually contains, since "last 7 days" says nothing about coverage
-  const span = all?.length
-    ? { newest: new Date(all[0].created_at), oldest: new Date(all[all.length - 1].created_at) }
-    : null;
+  const at = (r: StoredRun) => new Date((r as unknown as { started_at?: string }).started_at ?? r.created_at);
+  const span = all?.length ? { newest: at(all[0]), oldest: at(all[all.length - 1]) } : null;
 
   return (
     <AppShell>
@@ -93,9 +103,10 @@ function InsightsInner() {
         {span && (
           <div className="flex items-center gap-2 mono text-[11px] dimmer -mt-2">
             <Clock size={11} />
-            {runs.length} of {all!.length} stored runs ·{" "}
+            {runs.length.toLocaleString()}
+            {totalInWindow > runs.length && ` of ${totalInWindow.toLocaleString()}`} runs ·{" "}
             {span.oldest.toLocaleString()} → {span.newest.toLocaleString()}
-            {runs.length === 0 && " · nothing in this window"}
+            {totalInWindow > MAX_ROWS && ` · capped at ${MAX_ROWS.toLocaleString()}`}
           </div>
         )}
 

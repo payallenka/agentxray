@@ -2,6 +2,7 @@ import type { Analysis, Finding } from "./types";
 
 export interface StoredRun {
   id: string;
+  started_at?: string;
   name: string;
   source: string;
   span_count: number;
@@ -184,7 +185,7 @@ export function byWorkflow(runs: StoredRun[], dimension: Dimension = "workflow")
 export function dailySeries(runs: StoredRun[]) {
   const acc = new Map<string, { runs: number; cost: number; waste: number }>();
   for (const r of runs) {
-    const day = r.created_at.slice(0, 10);
+    const day = (r.started_at ?? r.created_at).slice(0, 10);
     const e = acc.get(day) ?? { runs: 0, cost: 0, waste: 0 };
     e.runs++; e.cost += r.cost_usd; e.waste += r.waste_usd;
     acc.set(day, e);
