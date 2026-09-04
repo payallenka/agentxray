@@ -18,7 +18,7 @@ export interface RunRow {
 
 /** Strip prompt and completion text. What remains is what we measured:
  *  span names, timings, token counts, model ids. */
-export function redactSpans(spans: Span[]): Span[] {
+function redactSpans(spans: Span[]): Span[] {
   return spans.map(({ inputPreview, outputPreview, error, ...rest }) => ({
     ...rest,
     // keep the shape of the error, drop anything that could carry user data
@@ -53,13 +53,13 @@ export const DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
 /** When the agent actually ran — not when we imported it. Falls back to now
  *  only when a trace carries no timestamp at all. */
-export function traceStartedAt(trace: Trace): string {
+function traceStartedAt(trace: Trace): string {
   const a = trace.attributes?.startedAt;
   if (a && !Number.isNaN(Date.parse(a))) return new Date(a).toISOString();
   return new Date().toISOString();
 }
 
-export function runSummary(trace: Trace, analysis: Analysis) {
+function runSummary(trace: Trace, analysis: Analysis) {
   return {
     name: trace.runName,
     source: trace.source,

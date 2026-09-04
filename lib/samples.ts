@@ -32,7 +32,7 @@ const C3 = C2 + " ASSISTANT: calling fetch_order. OBSERVATION: " + ORDER_OUT +
   " ASSISTANT: calling fetch_customer. OBSERVATION: " + CUST_OUT;
 const C4 = C3 + " ASSISTANT: calling send_email. OBSERVATION: refund confirmation dispatched.";
 
-export const SAMPLE_REACT = JSON.stringify(
+const SAMPLE_REACT = JSON.stringify(
   {
     runName: "support_agent · refund request (degraded run)",
     spans: [
@@ -107,7 +107,7 @@ const otlpSpan = (
   status: err ? { code: 2, message: err } : { code: 1 },
 });
 
-export const SAMPLE_OTLP = JSON.stringify(
+const SAMPLE_OTLP = JSON.stringify(
   {
     resourceSpans: [
       {
@@ -157,7 +157,7 @@ export const SAMPLE_OTLP = JSON.stringify(
 
 /* ---- a healthy run, for contrast ---- */
 
-export const SAMPLE_HEALTHY = JSON.stringify(
+const SAMPLE_HEALTHY = JSON.stringify(
   {
     runName: "pricing_agent · quote (healthy run)",
     spans: [
