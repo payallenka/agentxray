@@ -96,6 +96,7 @@ def forward(trace: dict, observations: list, *, redact: bool, force: bool) -> Op
     payload = {
         "name": name,
         "observations": observations,
+        "timestamp": trace.get("timestamp") or trace.get("createdAt"),
         "sessionId": trace.get("sessionId"),
         "userId": trace.get("userId"),
         "environment": trace.get("environment"),

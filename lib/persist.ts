@@ -1,4 +1,5 @@
 import type { Analysis, Span, Trace } from "./types";
+import { categorise } from "./aggregate";
 
 export interface RunRow {
   id: string;
@@ -50,10 +51,23 @@ export async function contentHash(trace: Trace): Promise<string> {
  *  short enough that a nightly job still records every night. */
 export const DEDUP_WINDOW_MS = 10 * 60 * 1000;
 
+/** When the agent actually ran — not when we imported it. Falls back to now
+ *  only when a trace carries no timestamp at all. */
+export function traceStartedAt(trace: Trace): string {
+  const a = trace.attributes?.startedAt;
+  if (a && !Number.isNaN(Date.parse(a))) return new Date(a).toISOString();
+  return new Date().toISOString();
+}
+
 export function runSummary(trace: Trace, analysis: Analysis) {
   return {
     name: trace.runName,
     source: trace.source,
+    started_at: traceStartedAt(trace),
+    categories: [...new Set(analysis.findings.map((f) => categorise(f)))],
+    session_id: trace.attributes?.session ?? null,
+    actor_id: trace.attributes?.user ?? null,
+    environment: trace.attributes?.environment ?? null,
     span_count: analysis.totals.spanCount,
     total_ms: analysis.totals.durationMs,
     cost_usd: analysis.totals.costUsd,

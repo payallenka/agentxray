@@ -63,6 +63,8 @@ function RunsInner() {
   const envFilter = params.get("environment");
   const findingFilter = params.get("finding") as Category | null;
   const [page, setPage] = useState(0);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [org, setOrg] = useState<{ id: string; name: string } | null>(null);
   const [runs, setRuns] = useState<RunRow[] | null>(null);
 
@@ -75,17 +77,66 @@ function RunsInner() {
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState("");
 
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
   const loadRuns = useCallback(async (orgId: string) => {
     if (!sb) return;
-    // the analysis blob is only needed to filter by finding type
-    const cols = "id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share,cp_share,finding_count,redacted,created_at"
-      + (findingFilter || sessionFilter || userFilter || envFilter ? ",analysis" : "");
-    const { data } = await sb
+    setLoading(true);
+
+    // Everything below happens in Postgres. With a thousand runs, fetching
+    // them all to filter in the browser is not a slower version of the right
+    // answer — it is a different, wrong answer, because the fetch is capped.
+    let query = sb
       .from("runs")
-      .select(cols)
-      .eq("org_id", orgId).order("created_at", { ascending: false }).limit(500);
+      .select(
+        "id,name,source,span_count,total_ms,cost_usd,waste_usd,waste_share,cp_share," +
+        "finding_count,redacted,created_at,started_at,session_id,actor_id,environment,categories",
+        { count: "exact" },
+      )
+      .eq("org_id", orgId);
+
+    if (workflowFilter) query = query.eq("name", workflowFilter);
+    if (sessionFilter)  query = query.eq("session_id", sessionFilter);
+    if (userFilter)     query = query.eq("actor_id", userFilter);
+    if (envFilter)      query = query.eq("environment", envFilter);
+    if (findingFilter)  query = query.contains("categories", [findingFilter]);
+    if (source !== "all") query = query.eq("source", source);
+
+    if (waste === "clean") query = query.lte("waste_share", 0);
+    if (waste === "some")  query = query.gt("waste_share", 0);
+    if (waste === "heavy") query = query.gt("waste_share", 0.25);
+
+    if (from) query = query.gte("started_at", new Date(from).toISOString());
+    if (to)   query = query.lte("started_at", new Date(`${to}T23:59:59`).toISOString());
+
+    // people remember a session id or a person, not a title — all three are searched
+    const needle = q.trim();
+    if (needle) {
+      query = query.or(
+        `name.ilike.%${needle}%,session_id.ilike.%${needle}%,actor_id.ilike.%${needle}%`,
+      );
+    }
+
+    const ORDER: Record<SortKey, [string, boolean]> = {
+      recent: ["started_at", false],
+      waste: ["waste_share", false],
+      recoverable: ["waste_usd", false],
+      cost: ["cost_usd", false],
+      duration: ["total_ms", false],
+      name: ["name", true],
+    };
+    const [col, asc] = ORDER[sort];
+    query = query.order(col, { ascending: asc, nullsFirst: false });
+
+    const start = page * PAGE_SIZE;
+    const { data, count, error } = await query.range(start, start + PAGE_SIZE - 1);
+    if (error) setErr(error.message);
     setRuns((data as unknown as RunRow[]) ?? []);
-  }, [sb, findingFilter, sessionFilter, userFilter, envFilter]);
+    setTotal(count ?? 0);
+    setLoading(false);
+  }, [sb, workflowFilter, sessionFilter, userFilter, envFilter, findingFilter,
+      source, waste, from, to, q, sort, page]);
 
   useEffect(() => {
     if (!sb) { setRuns([]); return; }
@@ -114,62 +165,25 @@ function RunsInner() {
     [runs],
   );
 
-  const visible = useMemo(() => {
-    let list = [...(runs ?? [])];
-    if (workflowFilter)
-      list = list.filter((r) => r.name.replace(/\s*\(.*\)\s*$/, "").trim() === workflowFilter);
-    for (const [key, val] of [["session", sessionFilter], ["user", userFilter], ["environment", envFilter]] as const) {
-      if (!val) continue;
-      list = list.filter((r) =>
-        (r as unknown as { analysis?: { attributes?: Record<string, string> } })
-          .analysis?.attributes?.[key] === val);
-    }
-    if (findingFilter)
-      list = list.filter((r) =>
-        ((r as unknown as { analysis?: { findings?: { id: string }[] } }).analysis?.findings ?? [])
-          .some((f) => categorise(f as never) === findingFilter));
-    const needle = q.trim().toLowerCase();
-    if (needle) list = list.filter((r) => r.name.toLowerCase().includes(needle));
-    if (source !== "all") list = list.filter((r) => r.source === source);
-    if (waste === "clean") list = list.filter((r) => r.waste_share <= 0);
-    if (waste === "some") list = list.filter((r) => r.waste_share > 0);
-    if (waste === "heavy") list = list.filter((r) => r.waste_share > 0.25);
-
-    const by: Record<SortKey, (a: RunRow, b: RunRow) => number> = {
-      recent: (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
-      waste: (a, b) => b.waste_share - a.waste_share,
-      recoverable: (a, b) => b.waste_usd - a.waste_usd,
-      cost: (a, b) => b.cost_usd - a.cost_usd,
-      duration: (a, b) => b.total_ms - a.total_ms,
-      name: (a, b) => a.name.localeCompare(b.name),
-    };
-    return list.sort(by[sort]);
-  }, [runs, q, source, waste, sort, workflowFilter, findingFilter, sessionFilter, userFilter, envFilter]);
-
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const shown = runs ?? [];
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount - 1);
-  const shown = visible.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
-
-  // any change to the filters puts you back on the first page
-  useEffect(() => { setPage(0); }, [q, source, waste, sort, workflowFilter, findingFilter, sessionFilter, userFilter, envFilter]);
+  const visible = shown;   // the server already narrowed it
 
   async function rename(id: string) {
-    const name = draft.trim();
+    const nextName = draft.trim();
     setEditing(null);
-    if (!sb || !org || !name) return;
+    if (!sb || !org || !nextName) return;
     const prev = runs;
-    setRuns((rs) => rs?.map((r) => (r.id === id ? { ...r, name } : r)) ?? rs);  // optimistic
+    setRuns((rs) => rs?.map((r) => (r.id === id ? { ...r, name: nextName } : r)) ?? rs);
     setErr("");
-
     // RLS does not reject a blocked update — it filters the row out and
-    // reports success against zero rows. Only the returned row proves it stuck.
-    const { data, error } = await sb.from("runs").update({ name }).eq("id", id).select("id");
+    // reports success. Only the returned row proves it stuck.
+    const { data, error } = await sb.from("runs").update({ name: nextName }).eq("id", id).select("id");
     if (error || !data?.length) {
       setRuns(prev ?? null);
-      setErr(
-        error?.message ??
-        "Rename was blocked by row-level security. Run supabase/002_rename_runs.sql in the SQL editor to grant UPDATE on runs.",
-      );
+      setErr(error?.message ??
+        "Rename was blocked by row-level security. Run supabase/002_rename_runs.sql to grant UPDATE on runs.");
     }
   }
 
@@ -178,11 +192,13 @@ function RunsInner() {
     setRuns((rs) => rs?.filter((r) => r.id !== id) ?? rs);
     const { error } = await sb.from("runs").delete().eq("id", id);
     if (error) { setErr(error.message); loadRuns(org.id); }
+    else setTotal((t) => Math.max(0, t - 1));
   }
 
-  const empty = runs !== null && runs.length === 0;
+  const empty = runs !== null && runs.length === 0 && total === 0;
   const filteredOut = runs !== null && runs.length > 0 && visible.length === 0;
-  const filtersOn = q.trim() !== "" || waste !== "all" || source !== "all";
+  const filtersOn = q.trim() !== "" || waste !== "all" || source !== "all" || !!from || !!to
+    || !!workflowFilter || !!findingFilter || !!sessionFilter || !!userFilter || !!envFilter;
 
   return (
     <AppShell>
@@ -195,9 +211,11 @@ function RunsInner() {
             <p className="prose-dim text-[14px] mt-1.5">
               {empty
                 ? "Nothing analyzed yet. Pick a way in below."
-                : runs
-                  ? `${visible.length}${filtersOn ? ` of ${runs.length}` : ""} analyzed run${visible.length === 1 ? "" : "s"}.`
-                  : "Loading…"}
+                : loading && !runs?.length
+                  ? "Loading…"
+                  : `${total.toLocaleString()} matching run${total === 1 ? "" : "s"}${
+                      filtersOn ? " for these filters" : ""
+                    }.`}
             </p>
           </div>
 
@@ -234,7 +252,7 @@ function RunsInner() {
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search titles…"
+                  placeholder="Search workflow, session or user…"
                   className="w-full text-[13px] rounded-[8px] pl-9 pr-8 py-2 bg-[var(--surface-1)]
                              border hairline outline-none focus:border-violet-500/50 interactive
                              placeholder:text-[var(--ink-3)]"
@@ -257,6 +275,28 @@ function RunsInner() {
                     {f.label}
                   </button>
                 ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 text-[12px]">
+                <input
+                  type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+                  className="rounded-[8px] px-2.5 py-2 bg-[var(--surface-1)] border hairline
+                             outline-none focus:border-violet-500/50 interactive dim
+                             [color-scheme:dark]"
+                />
+                <span className="dimmer">→</span>
+                <input
+                  type="date" value={to} onChange={(e) => setTo(e.target.value)}
+                  className="rounded-[8px] px-2.5 py-2 bg-[var(--surface-1)] border hairline
+                             outline-none focus:border-violet-500/50 interactive dim
+                             [color-scheme:dark]"
+                />
+                {(from || to) && (
+                  <button onClick={() => { setFrom(""); setTo(""); }}
+                          className="dimmer hover:text-[var(--ink)] interactive px-1" aria-label="clear dates">
+                    <X size={13} />
+                  </button>
+                )}
               </div>
 
               {sources.length > 1 && (
@@ -372,7 +412,22 @@ function RunsInner() {
                           <div className="mono text-[10.5px] dimmer mt-1 flex items-center gap-2 flex-wrap">
                             <span>{r.source}</span><span>·</span>
                             <span>{r.span_count} spans</span><span>·</span>
-                            <span>{new Date(r.created_at).toLocaleString()}</span>
+                            <span>{new Date((r as unknown as { started_at?: string }).started_at ?? r.created_at).toLocaleString()}</span>
+                            {(r as unknown as { session_id?: string }).session_id && (
+                              <>
+                                <span>·</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    router.push(`/runs?session=${(r as unknown as { session_id: string }).session_id}`);
+                                  }}
+                                  className="hover:text-[var(--accent-soft)] interactive"
+                                  title="see this whole conversation"
+                                >
+                                  session {(r as unknown as { session_id: string }).session_id.slice(0, 8)}
+                                </button>
+                              </>
+                            )}
                             {r.redacted && <Badge tone="neutral">redacted</Badge>}
                           </div>
                         </div>
@@ -406,7 +461,7 @@ function RunsInner() {
           {pageCount > 1 && (
             <div className="flex items-center justify-between gap-4 pt-1">
               <span className="mono text-[11.5px] dimmer">
-                {pageSafe * PAGE_SIZE + 1}–{Math.min((pageSafe + 1) * PAGE_SIZE, visible.length)} of {visible.length}
+                {total === 0 ? "0" : `${pageSafe * PAGE_SIZE + 1}–${Math.min((pageSafe + 1) * PAGE_SIZE, total)}`} of {total.toLocaleString()}
               </span>
               <div className="flex items-center gap-1.5">
                 <button

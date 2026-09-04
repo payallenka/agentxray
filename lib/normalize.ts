@@ -220,6 +220,7 @@ function fromLangfuse(doc: Record<string, unknown>) {
     if (v == null || v === "") return;
     attrs[k] = String(v).slice(0, 120);
   };
+  put("startedAt", doc.timestamp ?? doc.createdAt ?? doc.created_at);
   put("session", doc.sessionId ?? doc.session_id);
   put("user", doc.userId ?? doc.user_id);
   put("environment", doc.environment);
