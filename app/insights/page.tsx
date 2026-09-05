@@ -312,7 +312,12 @@ function InsightsInner() {
                         <td className="px-3 py-2.5 mono">
                           <Link href={`/runs?${dim}=${encodeURIComponent(f.name)}`}
                                 className="hover:text-[var(--accent-soft)] interactive inline-flex items-center gap-1.5">
-                            <span className="truncate max-w-[26ch] inline-block align-bottom">{f.name}</span>
+                            <span className="block">
+                              <span className="truncate max-w-[38ch] inline-block align-bottom">{f.label}</span>
+                              {f.sublabel && (
+                                <span className="block text-[10px] dimmer truncate max-w-[38ch]">{f.sublabel}</span>
+                              )}
+                            </span>
                             <ArrowRight size={11} className="dimmer opacity-0 group-hover:opacity-100" />
                           </Link>
                         </td>
@@ -347,20 +352,36 @@ function InsightsInner() {
             {series.length > 1 && (
               <Card className="p-6">
                 <CardLabel>Spend per day</CardLabel>
-                <div className="flex items-end gap-1.5 h-28 mt-5">
-                  {series.map((d) => {
-                    const max = Math.max(...series.map((x) => x.cost)) || 1;
-                    return (
-                      <div key={d.day} className="flex-1 flex flex-col justify-end items-center gap-1 group">
-                        <div className="w-full rounded-t-[3px] bg-[var(--accent)] relative"
-                             style={{ height: `${Math.max((d.cost / max) * 100, 2)}%` }}>
-                          <div className="absolute bottom-0 left-0 right-0 rounded-t-[3px] bg-[var(--critical)]"
-                               style={{ height: `${d.cost ? (d.waste / d.cost) * 100 : 0}%` }} />
+                <div className="mt-5">
+                  <div className="flex items-end gap-1.5 h-32">
+                    {series.map((d) => {
+                      const max = Math.max(...series.map((x) => x.cost)) || 1;
+                      const h = Math.max((d.cost / max) * 100, d.cost > 0 ? 3 : 1);
+                      const wasteH = d.cost ? (d.waste / d.cost) * 100 : 0;
+                      return (
+                        <div key={d.day} className="flex-1 h-full flex flex-col justify-end group relative">
+                          <div className="w-full rounded-t-[3px] bg-[var(--accent)] relative interactive group-hover:brightness-125"
+                               style={{ height: `${h}%` }}>
+                            <div className="absolute bottom-0 left-0 right-0 rounded-t-[3px] bg-[var(--critical)]"
+                                 style={{ height: `${wasteH}%` }} />
+                          </div>
+                          <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full opacity-0
+                                          group-hover:opacity-100 interactive pointer-events-none z-10
+                                          mono text-[10px] whitespace-nowrap px-2 py-1 rounded-[6px]
+                                          bg-[var(--surface-3)] border border-[var(--line-strong)]">
+                            {usd(d.cost)} · {usd(d.waste)} recoverable · {d.runs} runs
+                          </div>
                         </div>
-                        <span className="mono text-[9px] dimmer">{d.day.slice(5)}</span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-1.5 mt-2">
+                    {series.map((d) => (
+                      <span key={d.day} className="flex-1 mono text-[9px] dimmer text-center truncate">
+                        {d.day.slice(5)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex gap-4 mono text-[10px] dimmer mt-3 pt-3 border-t hairline">
                   <span className="flex items-center gap-1.5"><i className="w-2.5 h-2 rounded-sm bg-[var(--accent)]" /> spend</span>

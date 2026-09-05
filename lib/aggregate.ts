@@ -158,7 +158,9 @@ function keyFor(r: StoredRun, d: Dimension): string | undefined {
 }
 
 export interface WorkflowRow {
-  name: string;
+  name: string;          // the grouping key — an id when grouping by session or user
+  label: string;         // what to actually show a person
+  sublabel?: string;     // the id, kept visible but secondary
   runs: number;
   costUsd: number;
   wasteUsd: number;
@@ -188,8 +190,34 @@ export function byWorkflow(runs: StoredRun[], dimension: Dimension = "workflow")
         counts.set(c, (counts.get(c) ?? 0) + 1);
       }
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    // A uuid is not a name. For a conversation the useful label is what it did
+    // and when; the id stays visible underneath because it is what you paste
+    // into Langfuse.
+    let label = name;
+    let sublabel: string | undefined;
+    if (dimension === "session" || dimension === "user") {
+      const flows = new Map<string, number>();
+      for (const r of rs) {
+        const k = r.name.replace(/\s*\(.*\)\s*$/, "").trim();
+        flows.set(k, (flows.get(k) ?? 0) + 1);
+      }
+      const top = [...flows.entries()].sort((a, b) => b[1] - a[1]);
+      const when = rs
+        .map((r) => new Date(r.started_at ?? r.created_at).getTime())
+        .sort((a, b) => a - b)[0];
+      const stamp = Number.isFinite(when)
+        ? new Date(when).toLocaleString(undefined,
+            { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+        : "";
+      label = dimension === "session"
+        ? [top.map(([f, n]) => (top.length > 1 ? `${f} ×${n}` : f)).slice(0, 2).join(" + "), stamp]
+            .filter(Boolean).join(" · ")
+        : `${top[0]?.[0] ?? "user"} · ${rs.length} run${rs.length === 1 ? "" : "s"} from ${stamp}`;
+      sublabel = name;
+    }
+
     return {
-      name, runs: rs.length, costUsd, wasteUsd,
+      name, label, sublabel, runs: rs.length, costUsd, wasteUsd,
       wasteShare: costUsd ? wasteUsd / costUsd : 0,
       avgMs: durs.reduce((a, b) => a + b, 0) / durs.length,
       p95Ms: durs[Math.min(durs.length - 1, Math.floor(durs.length * 0.95))],
