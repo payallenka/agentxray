@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cloudEnabled, supabase } from "@/lib/supabase/client";
+import { Logo } from "@/components/Logo";
 
 type Mode = "signin" | "signup";
 
@@ -65,8 +66,8 @@ function LoginInner() {
     <main className="min-h-screen grid lg:grid-cols-[1fr_520px]">
       {/* pitch side */}
       <div className="hidden lg:flex flex-col justify-between p-12 border-r hairline">
-        <Link href="/" className="font-semibold tracking-tight hover:opacity-80 transition">
-          Agent X-Ray
+        <Link href="/" className="hover:opacity-80 transition">
+          <Logo />
         </Link>
 
         <div className="max-w-md">
@@ -98,8 +99,8 @@ function LoginInner() {
       {/* form side */}
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <Link href="/" className="lg:hidden font-semibold tracking-tight block mb-8">
-            Agent X-Ray
+          <Link href="/" className="lg:hidden block mb-8">
+            <Logo />
           </Link>
 
           <h1 className="text-2xl font-semibold tracking-tight">

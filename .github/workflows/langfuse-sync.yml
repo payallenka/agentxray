@@ -1,6 +1,6 @@
 # A daily roll-up of yesterday's agent runs.
 #
-# Deliberately daily, not continuous. Agent X-Ray is a post-hoc analyser: the
+# Deliberately daily, not continuous. Runscan is a post-hoc analyser: the
 # question it answers — what did we waste — is a review question, not a
 # monitoring one. Polling every few minutes would burn Langfuse's rate limit to
 # produce data that is stale but not live, for a dashboard nobody watches in
@@ -12,7 +12,7 @@
 #
 # Required repository secrets:
 #   LANGFUSE_PUBLIC_KEY  LANGFUSE_SECRET_KEY  LANGFUSE_BASE_URL
-#   AGENTXRAY_ENDPOINT   AGENTXRAY_API_KEY
+#   RUNSCAN_ENDPOINT   RUNSCAN_API_KEY
 
 name: Daily trace roll-up
 
@@ -54,18 +54,18 @@ jobs:
       - name: Restore sync cursor
         uses: actions/cache@v4
         with:
-          path: .agentxray-sync.json
-          key: agentxray-sync-${{ github.run_id }}
-          restore-keys: agentxray-sync-
+          path: .runscan-sync.json
+          key: runscan-sync-${{ github.run_id }}
+          restore-keys: runscan-sync-
 
       - name: Sync
         env:
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_BASE_URL:   ${{ secrets.LANGFUSE_BASE_URL }}
-          AGENTXRAY_ENDPOINT:  ${{ secrets.AGENTXRAY_ENDPOINT }}
-          AGENTXRAY_API_KEY:   ${{ secrets.AGENTXRAY_API_KEY }}
-          AGENTXRAY_SYNC_STATE: .agentxray-sync.json
+          RUNSCAN_ENDPOINT:  ${{ secrets.RUNSCAN_ENDPOINT }}
+          RUNSCAN_API_KEY:   ${{ secrets.RUNSCAN_API_KEY }}
+          RUNSCAN_SYNC_STATE: .runscan-sync.json
         run: |
           python integrations/python/langfuse_sync.py \
             --limit "${{ inputs.limit || 100 }}" \

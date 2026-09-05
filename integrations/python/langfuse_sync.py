@@ -1,5 +1,5 @@
 """
-Agent X-Ray ← Langfuse sync.
+Runscan ← Langfuse sync.
 
 Zero-touch integration. If a service already writes traces to Langfuse, this
 reads them and forwards them for analysis — no code changes, no dependency, no
@@ -14,10 +14,10 @@ nothing to survive a branch switch or a redeploy.
 
 Environment:
     LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL
-    AGENTXRAY_ENDPOINT   default http://localhost:3000
-    AGENTXRAY_API_KEY    issue one from the workspace sidebar
+    RUNSCAN_ENDPOINT   default http://localhost:3000
+    RUNSCAN_API_KEY    issue one from the workspace sidebar
 
-A cursor is kept in ~/.agentxray-sync.json so a restart does not re-send
+A cursor is kept in ~/.runscan-sync.json so a restart does not re-send
 everything; duplicates are collapsed server-side regardless.
 """
 
@@ -36,10 +36,10 @@ import requests
 LF_HOST = (os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST")
            or "https://cloud.langfuse.com").rstrip("/")
 LF_AUTH = (os.getenv("LANGFUSE_PUBLIC_KEY", ""), os.getenv("LANGFUSE_SECRET_KEY", ""))
-AX = (os.getenv("AGENTXRAY_ENDPOINT") or "http://localhost:3000").rstrip("/")
-AX_KEY = os.getenv("AGENTXRAY_API_KEY", "")
+AX = (os.getenv("RUNSCAN_ENDPOINT") or "http://localhost:3000").rstrip("/")
+AX_KEY = os.getenv("RUNSCAN_API_KEY", "")
 
-STATE = Path(os.getenv("AGENTXRAY_SYNC_STATE", Path.home() / ".agentxray-sync.json"))
+STATE = Path(os.getenv("RUNSCAN_SYNC_STATE", Path.home() / ".runscan-sync.json"))
 
 
 def load_state() -> dict:
@@ -236,13 +236,13 @@ def main() -> int:
 
     for label, val in (("LANGFUSE_PUBLIC_KEY", LF_AUTH[0]),
                        ("LANGFUSE_SECRET_KEY", LF_AUTH[1]),
-                       ("AGENTXRAY_API_KEY", AX_KEY)):
+                       ("RUNSCAN_API_KEY", AX_KEY)):
         if not val:
             print(f"missing {label}", file=sys.stderr)
             return 1
 
     print(f"langfuse   {LF_HOST}")
-    print(f"agentxray  {AX}")
+    print(f"runscan  {AX}")
     print(f"cursor     {STATE}")
     print(f"redaction  {'off — prompt text will be stored' if args.no_redact else 'on'}\n")
 

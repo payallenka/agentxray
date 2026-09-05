@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Check, X, Activity, GitBranch, Repeat, Scissors } from "lucide-react";
 import { Badge, Button, Card, CardLabel, CountUp, Reveal, TooltipRoot } from "@/components/ui";
 import { HeroCta, NavCta } from "@/components/SessionCta";
+import { LogoMark } from "@/components/Logo";
 
 const SHELL = "mx-auto w-full max-w-[1600px] px-6 sm:px-10 lg:px-14";
 
@@ -56,8 +57,8 @@ export default function Landing() {
         <nav className="sticky top-0 z-30 backdrop-blur-xl bg-[var(--bg)]/75 border-b hairline">
           <div className={`${SHELL} h-16 flex items-center justify-between`}>
             <div className="flex items-center gap-2.5">
-              <span className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_12px_var(--accent)]" />
-              <span className="font-semibold tracking-[-0.02em]">Agent X-Ray</span>
+              <LogoMark size={20} />
+              <span className="font-semibold tracking-[-0.02em]">Runscan</span>
             </div>
             <div className="flex items-center gap-6 text-[13px]">
               <a href="#analyses" className="dim hover:text-[var(--ink)] interactive hidden md:inline">What it computes</a>
@@ -378,7 +379,7 @@ export default function Landing() {
                 <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
                 <span className="mono text-[11px] dimmer ml-2">ci · post-run hook</span>
               </div>
-              <pre className="mono text-[12.5px] leading-[1.75] p-6"><span className="dimmer">$</span> curl -X POST https://agentxray.app/api/ingest \
+              <pre className="mono text-[12.5px] leading-[1.75] p-6"><span className="dimmer">$</span> curl -X POST https://runscan.app/api/ingest \
     -H <span className="text-[var(--ok)]">&quot;Authorization: Bearer axr_...&quot;</span> \
     --data @trace.json
 
@@ -419,12 +420,12 @@ export default function Landing() {
         <footer className="border-t hairline">
           <div className={`${SHELL} py-10`}>
             <div className="mono text-[11px] dimmer flex flex-wrap justify-between gap-3">
-              <span>Agent X-Ray · deterministic analysis, nothing uploaded</span>
+              <span>Runscan · deterministic analysis, nothing uploaded</span>
               <span>MIT licensed · built at a buildathon</span>
             </div>
             <p className="prose-dim text-[11.5px] mt-5 max-w-[80ch] leading-relaxed">
               A personal, independent open-source project. Not affiliated with, endorsed by, or
-              connected to any employer or client. Agent X-Ray is a post-hoc analyser: it collects
+              connected to any employer or client. Runscan is a post-hoc analyser: it collects
               no telemetry, monitors nothing, and has no alerting — it reads a trace another tool
               already recorded. All sample traces are synthetic.
             </p>

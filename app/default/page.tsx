@@ -9,6 +9,7 @@ import { analyze } from "@/lib/analyze";
 import AnalysisView from "@/components/AnalysisView";
 import { Badge, Button, Card, CardLabel, Skeleton, TooltipRoot } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { LogoMark } from "@/components/Logo";
 
 const SHELL = "mx-auto w-full max-w-[1600px] px-6 sm:px-10 lg:px-14";
 
@@ -56,8 +57,8 @@ export default function DefaultRun() {
         <nav className="sticky top-0 z-30 backdrop-blur-xl bg-[var(--bg)]/80 border-b hairline">
           <div className={`${SHELL} h-16 flex items-center justify-between gap-6`}>
             <Link href="/" className="flex items-center gap-2.5">
-              <span className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_12px_var(--accent)]" />
-              <span className="font-semibold tracking-[-0.02em]">Agent X-Ray</span>
+              <LogoMark size={20} />
+              <span className="font-semibold tracking-[-0.02em]">Runscan</span>
             </Link>
             <div className="flex items-center gap-6 text-[13px]">
               <Link href="/docs/start-here" className="dim hover:text-[var(--ink)] interactive hidden sm:inline">Docs</Link>
@@ -75,7 +76,7 @@ export default function DefaultRun() {
           <div className="max-w-[75ch]">
             <div className="eyebrow">A worked example</div>
             <h1 className="display text-[clamp(1.9rem,3vw,2.5rem)] mt-4">
-              This is what Agent X-Ray tells you about an agent run
+              This is what Runscan tells you about an agent run
             </h1>
             <p className="prose-dim text-[15px] mt-4">
               Below is a real analysis of a sample trace — nothing is mocked, the engine ran in your
@@ -193,7 +194,7 @@ export default function DefaultRun() {
         <footer className="border-t hairline mt-6">
           <div className={`${SHELL} py-8`}>
             <div className="mono text-[11px] dimmer">
-              Agent X-Ray · deterministic analysis, nothing uploaded · MIT licensed
+              Runscan · deterministic analysis, nothing uploaded · MIT licensed
             </div>
             <p className="prose-dim text-[11.5px] mt-4 max-w-[80ch] leading-relaxed">
               A personal, independent open-source project. Not affiliated with, endorsed by, or

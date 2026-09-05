@@ -1,7 +1,7 @@
 """
-Agent X-Ray OpenTelemetry exporter.
+Runscan OpenTelemetry exporter.
 
-Agent X-Ray analyses a *complete* agent run, not a live stream. A normal OTLP
+Runscan analyses a *complete* agent run, not a live stream. A normal OTLP
 exporter ships spans in batches as they finish, which would deliver half a run
 at a time and make critical-path and dead-branch analysis meaningless.
 
@@ -10,13 +10,13 @@ its root span ends. It never raises into your application and never blocks the
 request path.
 
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from agentxray_exporter import AgentXRayExporter
+    from runscan_exporter import RunscanExporter
 
     provider.add_span_processor(
         SimpleSpanProcessor(
-            AgentXRayExporter(
-                endpoint="https://your-agentxray.vercel.app",
-                api_key=os.environ["AGENTXRAY_API_KEY"],
+            RunscanExporter(
+                endpoint="https://your-runscan.vercel.app",
+                api_key=os.environ["RUNSCAN_API_KEY"],
             )
         )
     )
@@ -37,14 +37,14 @@ try:
     from opentelemetry.sdk.trace import ReadableSpan
     from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 except ImportError as exc:  # pragma: no cover
-    raise ImportError("agentxray_exporter requires opentelemetry-sdk") from exc
+    raise ImportError("runscan_exporter requires opentelemetry-sdk") from exc
 
 import requests
 
-log = logging.getLogger("agentxray")
+log = logging.getLogger("runscan")
 
 # Attributes worth carrying even when they are not GenAI semconv. Everything
-# else is passed through untouched — Agent X-Ray ignores what it does not know.
+# else is passed through untouched — Runscan ignores what it does not know.
 _PROMPT_KEYS = ("gen_ai.prompt", "input.value", "gen_ai.input.messages", "input")
 _COMPLETION_KEYS = ("gen_ai.completion", "output.value", "gen_ai.output.messages", "output")
 
@@ -61,7 +61,7 @@ def _otlp_value(v: Any) -> Dict[str, Any]:
     return {"stringValue": str(v)[:8000]}
 
 
-class AgentXRayExporter(SpanExporter):
+class RunscanExporter(SpanExporter):
     """Buffers spans per trace and posts each complete trace once."""
 
     def __init__(
@@ -75,8 +75,8 @@ class AgentXRayExporter(SpanExporter):
         max_spans_per_trace: int = 5000,
         trace_ttl_seconds: float = 600.0,
     ) -> None:
-        self.endpoint = (endpoint or os.getenv("AGENTXRAY_ENDPOINT", "")).rstrip("/")
-        self.api_key = api_key or os.getenv("AGENTXRAY_API_KEY", "")
+        self.endpoint = (endpoint or os.getenv("RUNSCAN_ENDPOINT", "")).rstrip("/")
+        self.api_key = api_key or os.getenv("RUNSCAN_API_KEY", "")
         self.service_name = service_name
         self.redact = redact
         self.timeout = timeout
@@ -89,7 +89,7 @@ class AgentXRayExporter(SpanExporter):
         self._enabled = bool(self.endpoint and self.api_key)
 
         if not self._enabled:
-            log.info("agentxray: disabled (no endpoint or api key) — spans are dropped")
+            log.info("runscan: disabled (no endpoint or api key) — spans are dropped")
 
     # ---------------------------------------------------------------- export
 
@@ -120,7 +120,7 @@ class AgentXRayExporter(SpanExporter):
                 self._flush(tid)
 
         except Exception:                      # never break the host app
-            log.debug("agentxray: export failed", exc_info=True)
+            log.debug("runscan: export failed", exc_info=True)
 
         return SpanExportResult.SUCCESS
 
@@ -166,7 +166,7 @@ class AgentXRayExporter(SpanExporter):
                 "resource": {"attributes": [
                     {"key": "service.name", "value": {"stringValue": self.service_name}}
                 ]},
-                "scopeSpans": [{"scope": {"name": "agentxray-exporter"}, "spans": spans}],
+                "scopeSpans": [{"scope": {"name": "runscan-exporter"}, "spans": spans}],
             }]
         }
 
@@ -183,19 +183,19 @@ class AgentXRayExporter(SpanExporter):
                 timeout=self.timeout,
             )
             if r.status_code >= 400:
-                log.warning("agentxray: ingest %s — %s", r.status_code, r.text[:200])
+                log.warning("runscan: ingest %s — %s", r.status_code, r.text[:200])
             else:
                 body = r.json()
                 if body.get("deduplicated"):
-                    log.debug("agentxray: trace %s deduplicated", trace_id[:8])
+                    log.debug("runscan: trace %s deduplicated", trace_id[:8])
                 else:
                     log.info(
-                        "agentxray: %s spans, $%.4f, %.0f%% recoverable — %s",
+                        "runscan: %s spans, $%.4f, %.0f%% recoverable — %s",
                         body.get("spans"), body.get("costUsd", 0),
                         (body.get("wasteShare") or 0) * 100, body.get("id"),
                     )
         except Exception:
-            log.debug("agentxray: post failed", exc_info=True)
+            log.debug("runscan: post failed", exc_info=True)
 
     def _evict_stale(self) -> None:
         """Drop traces whose root span never arrived — a crash, or a run that

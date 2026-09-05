@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
 # Nightly manual ingest. Pulls the day's traces from Langfuse into a running
-# Agent X-Ray, then prints what is now in the workspace.
+# Runscan, then prints what is now in the workspace.
 #
 #   ./scripts/nightly-ingest.sh
 #   ./scripts/nightly-ingest.sh --min-spans 6 --limit 200
 #
-# Reads Langfuse credentials from the ORBIS .env, and Agent X-Ray settings from
+# Reads Langfuse credentials from the ORBIS .env, and Runscan settings from
 # .env.local here. Override either with environment variables.
 
 set -euo pipefail
@@ -21,22 +21,22 @@ else
   echo "! no ORBIS .env at $ORBIS_ENV — set LANGFUSE_* yourself" >&2
 fi
 
-# Agent X-Ray settings
+# Runscan settings
 [ -f .env.local ] && { set -a; . ./.env.local; set +a; }
 
-export AGENTXRAY_ENDPOINT="${AGENTXRAY_ENDPOINT:-http://localhost:3000}"
-export AGENTXRAY_SYNC_STATE="${AGENTXRAY_SYNC_STATE:-$HOME/.agentxray-sync.json}"
+export RUNSCAN_ENDPOINT="${RUNSCAN_ENDPOINT:-http://localhost:3000}"
+export RUNSCAN_SYNC_STATE="${RUNSCAN_SYNC_STATE:-$HOME/.runscan-sync.json}"
 
-if [ -z "${AGENTXRAY_API_KEY:-}" ]; then
-  echo "! AGENTXRAY_API_KEY is not set." >&2
+if [ -z "${RUNSCAN_API_KEY:-}" ]; then
+  echo "! RUNSCAN_API_KEY is not set." >&2
   echo "  Issue one from the workspace sidebar, then:" >&2
-  echo "    echo 'AGENTXRAY_API_KEY=axr_...' >> .env.local" >&2
+  echo "    echo 'RUNSCAN_API_KEY=axr_...' >> .env.local" >&2
   exit 1
 fi
 
 # a nightly job that silently posts into the void is worse than one that fails
-if ! curl -sf -o /dev/null --max-time 5 "$AGENTXRAY_ENDPOINT"; then
-  echo "! $AGENTXRAY_ENDPOINT is not responding." >&2
+if ! curl -sf -o /dev/null --max-time 5 "$RUNSCAN_ENDPOINT"; then
+  echo "! $RUNSCAN_ENDPOINT is not responding." >&2
   echo "  Start it first:  npm run dev" >&2
   exit 1
 fi
@@ -65,4 +65,4 @@ for (const r of data.slice(0,8))
   console.log(\`    \${r.name.slice(0,34).padEnd(35)} \${String(r.span_count).padStart(3)} spans  \\\$\${r.cost_usd.toFixed(4)}  \${String(Math.round(r.waste_share*100)).padStart(3)}%\`);
 " 2>/dev/null || echo "  (summary unavailable)"
 echo
-echo "view at $AGENTXRAY_ENDPOINT/runs"
+echo "view at $RUNSCAN_ENDPOINT/runs"

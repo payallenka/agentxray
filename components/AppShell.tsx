@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import UserMenu from "@/components/UserMenu";
 import { TooltipRoot } from "@/components/ui";
 import { cn } from "@/lib/cn";
+import { LogoMark } from "@/components/Logo";
 
 export const SHELL = "mx-auto w-full max-w-[1600px] px-6 sm:px-10 lg:px-14";
 
@@ -26,8 +27,8 @@ export default function AppShell({
           <div className={`${SHELL} h-16 flex items-center justify-between gap-6`}>
             <div className="flex items-center gap-7 min-w-0">
               <Link href="/insights" className="flex items-center gap-2.5 shrink-0">
-                <span className="w-2 h-2 rounded-full bg-[var(--accent)] shadow-[0_0_12px_var(--accent)]" />
-                <span className="font-semibold tracking-[-0.02em]">Agent X-Ray</span>
+                <LogoMark size={20} />
+                <span className="font-semibold tracking-[-0.02em]">Runscan</span>
               </Link>
               <div className="flex items-center gap-1">
                 {TABS.map((t) => {
