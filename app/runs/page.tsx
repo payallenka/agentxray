@@ -63,8 +63,14 @@ function RunsInner() {
   const envFilter = params.get("environment");
   const findingFilter = params.get("finding") as Category | null;
   const [page, setPage] = useState(0);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(params.get("from") ?? "");
+  const [to, setTo] = useState(params.get("to") ?? "");
+
+  // arriving from a link (a day on the chart, say) should apply its dates
+  useEffect(() => {
+    setFrom(params.get("from") ?? "");
+    setTo(params.get("to") ?? "");
+  }, [params]);
   const [org, setOrg] = useState<{ id: string; name: string } | null>(null);
   const [runs, setRuns] = useState<RunRow[] | null>(null);
 
@@ -219,7 +225,7 @@ function RunsInner() {
             </p>
           </div>
 
-          {(workflowFilter || findingFilter || sessionFilter || userFilter || envFilter) && (
+          {(workflowFilter || findingFilter || sessionFilter || userFilter || envFilter || from || to) && (
             <Card className="px-4 py-3 flex items-center justify-between gap-4 border-violet-500/30 bg-violet-500/[0.05]">
               <div className="flex items-center gap-2.5 min-w-0">
                 <Filter size={14} className="text-[var(--accent-soft)] shrink-0" />
@@ -229,6 +235,8 @@ function RunsInner() {
                   {sessionFilter && <> in conversation <span className="mono">{sessionFilter.slice(0, 12)}…</span></>}
                   {userFilter && <> from <span className="mono">{userFilter}</span></>}
                   {envFilter && <> in <span className="mono">{envFilter}</span></>}
+                  {from && to && from === to && <> on <span className="mono">{from}</span></>}
+                  {from && to && from !== to && <> between <span className="mono">{from}</span> and <span className="mono">{to}</span></>}
                   {findingFilter && <> with <span className="mono">{CATEGORY_LABEL[findingFilter] ?? findingFilter}</span></>}
                 </span>
               </div>
@@ -236,7 +244,7 @@ function RunsInner() {
                 <Link href="/insights" className="mono text-[11px] text-[var(--accent-soft)] hover:underline">
                   ← back to insights
                 </Link>
-                <button onClick={() => router.push("/runs")}
+                <button onClick={() => { setFrom(""); setTo(""); router.push("/runs"); }}
                         className="mono text-[11px] dimmer hover:text-[var(--ink)] interactive">
                   clear
                 </button>

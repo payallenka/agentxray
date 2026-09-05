@@ -351,7 +351,10 @@ function InsightsInner() {
 
             {series.length > 1 && (
               <Card className="p-6">
-                <CardLabel>Spend per day</CardLabel>
+                <div className="flex items-baseline justify-between gap-4">
+                  <CardLabel>Spend per day</CardLabel>
+                  <span className="mono text-[10px] dimmer">click a day to see its runs</span>
+                </div>
                 <div className="mt-5">
                   <div className="flex items-end gap-1.5 h-32">
                     {series.map((d) => {
@@ -359,7 +362,12 @@ function InsightsInner() {
                       const h = Math.max((d.cost / max) * 100, d.cost > 0 ? 3 : 1);
                       const wasteH = d.cost ? (d.waste / d.cost) * 100 : 0;
                       return (
-                        <div key={d.day} className="flex-1 h-full flex flex-col justify-end group relative">
+                        <Link
+                          key={d.day}
+                          href={`/runs?from=${d.day}&to=${d.day}`}
+                          className="flex-1 h-full flex flex-col justify-end group relative"
+                          title={`See the ${d.runs} run${d.runs === 1 ? "" : "s"} from ${d.day}`}
+                        >
                           <div className="w-full rounded-t-[3px] bg-[var(--accent)] relative interactive group-hover:brightness-125"
                                style={{ height: `${h}%` }}>
                             <div className="absolute bottom-0 left-0 right-0 rounded-t-[3px] bg-[var(--critical)]"
@@ -371,7 +379,7 @@ function InsightsInner() {
                                           bg-[var(--surface-3)] border border-[var(--line-strong)]">
                             {usd(d.cost)} · {usd(d.waste)} recoverable · {d.runs} runs
                           </div>
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>
@@ -391,7 +399,7 @@ function InsightsInner() {
             )}
 
             <div className="mono text-[11.5px] dimmer">
-              Click any opportunity or workflow above to see the runs behind it —{" "}
+              Everything here drills down — an opportunity, a group, or a day on the chart —{" "}
               <Link href="/runs" className="text-[var(--accent-soft)] hover:underline">
                 or browse them all
               </Link>.
