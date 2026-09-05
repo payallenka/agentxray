@@ -12,18 +12,26 @@ const TABLE: Record<string, { in: number; out: number }> = {
   "text-embedding-3-large": { in: 0.13, out: 0 },
 };
 
-const FALLBACK = { in: 3, out: 15 };
-
-export function priceFor(model?: string) {
-  if (!model) return FALLBACK;
+/**
+ * Rates for a model we do not recognise are unknowable, and guessing one is
+ * worse than admitting it: a generic mid-tier rate applied to a nano model
+ * overstates cost by more than an order of magnitude, and the reader has no
+ * way to tell. Unknown means unpriced, and the run says so.
+ */
+export function priceFor(model?: string): { in: number; out: number } | null {
+  if (!model) return null;
   const key = model.toLowerCase();
   if (TABLE[key]) return TABLE[key];
   const hit = Object.keys(TABLE).find((k) => key.includes(k) || k.includes(key));
-  return hit ? TABLE[hit] : FALLBACK;
+  return hit ? TABLE[hit] : null;
 }
 
-export function estimateCost(model: string | undefined, inTok = 0, outTok = 0) {
+/** undefined when the model is unknown — never a fabricated figure. */
+export function estimateCost(
+  model: string | undefined, inTok = 0, outTok = 0,
+): number | undefined {
   const p = priceFor(model);
+  if (!p) return undefined;
   return (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
 }
 

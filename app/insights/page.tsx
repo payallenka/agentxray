@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock } from "lucide-react";
+import { ArrowRight, Clock, ChevronRight } from "lucide-react";
 import AppShell, { SHELL } from "@/components/AppShell";
 import AuthGate from "@/components/AuthGate";
 import { supabase } from "@/lib/supabase/client";
@@ -31,6 +31,7 @@ function InsightsInner() {
   const [all, setAll] = useState<StoredRun[] | null>(null);
   const [win, setWin] = useState<(typeof WINDOWS)[number]["key"]>("7d");
   const [totalInWindow, setTotalInWindow] = useState(0);
+  const [open, setOpen] = useState<string | null>(null);
   const [dim, setDim] = useState<Dimension>("workflow");
 
   const load = useCallback(async () => {
@@ -156,45 +157,109 @@ function InsightsInner() {
                 <div className="text-[14px] text-[var(--ok)]">Nothing to act on in this window.</div>
               ) : (
                 <div className="grid gap-2.5">
-                  {opps.map((o, i) => (
+                  {opps.map((o, i) => {
+                    const isOpen = open === o.category;
+                    return (
                     <motion.div
                       key={o.category}
                       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.35, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] }}
-                      className="rounded-[9px] border hairline p-4 hover:border-[var(--line-strong)] interactive"
+                      className={cn("rounded-[9px] border overflow-hidden interactive",
+                        isOpen ? "border-[var(--line-strong)] bg-white/[0.02]" : "hairline hover:border-[var(--line-strong)]")}
                     >
-                      <div className="flex items-start justify-between gap-4 flex-wrap">
-                        <Link
-                          href={`/runs?finding=${o.category}`}
-                          className="flex items-center gap-3 min-w-0 group"
+                      <button
+                        onClick={() => setOpen(isOpen ? null : o.category)}
+                        className="w-full text-left p-4 hover:bg-white/[0.02] interactive"
+                      >
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <ChevronRight size={14}
+                              className={cn("dimmer shrink-0 interactive", isOpen && "rotate-90")} />
+                            <Badge tone={SEV_TONE[o.severity]}>{o.severity.toUpperCase()}</Badge>
+                            <span className="text-[14.5px]">{o.label}</span>
+                          </div>
+                          <div className="flex items-center gap-4 mono text-[12px] shrink-0">
+                            {o.usd > 0 && <span className="text-[var(--critical)]">{usd(o.usd)}</span>}
+                            {o.ms > 0 && <span className="text-[var(--warn)]">{ms(o.ms)}</span>}
+                            <span className="dimmer">{o.runs}/{o.totalRuns} runs</span>
+                          </div>
+                        </div>
+                        <div className="h-1 rounded-full bg-white/[0.05] overflow-hidden mt-3">
+                          <div className="h-full rounded-full bg-[var(--accent)]"
+                               style={{ width: `${(o.runs / o.totalRuns) * 100}%` }} />
+                        </div>
+                        {!isOpen && <p className="prose-dim text-[13px] mt-3">{o.fix}</p>}
+                      </button>
+
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                          className="px-4 pb-4"
                         >
-                          <Badge tone={SEV_TONE[o.severity]}>{o.severity.toUpperCase()}</Badge>
-                          <span className="text-[14.5px] group-hover:text-[var(--accent-soft)] interactive">
-                            {o.label}
-                          </span>
-                          <ArrowRight size={13} className="dimmer opacity-0 group-hover:opacity-100 interactive" />
-                        </Link>
-                        <div className="flex items-center gap-4 mono text-[12px] shrink-0">
-                          {o.usd > 0 && <span className="text-[var(--critical)]">{usd(o.usd)}</span>}
-                          {o.ms > 0 && <span className="text-[var(--warn)]">{ms(o.ms)}</span>}
-                          <span className="dimmer">{o.runs}/{o.totalRuns} runs</span>
-                        </div>
-                      </div>
+                          <div className="border-t hairline pt-4 grid gap-5">
+                            <div>
+                              <CardLabel>What to do</CardLabel>
+                              <p className="prose-dim text-[13.5px] mt-1.5">{o.fix}</p>
+                            </div>
 
-                      {/* how widespread, at a glance */}
-                      <div className="h-1 rounded-full bg-white/[0.05] overflow-hidden mt-3">
-                        <div className="h-full rounded-full bg-[var(--accent)]"
-                             style={{ width: `${(o.runs / o.totalRuns) * 100}%` }} />
-                      </div>
+                            {o.workflows.length > 0 && (
+                              <div>
+                                <CardLabel>Where it happens</CardLabel>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {o.workflows.map((w) => (
+                                    <Link key={w.name} href={`/runs?workflow=${encodeURIComponent(w.name)}&finding=${o.category}`}
+                                          className="mono text-[11px] px-2 py-1 rounded-[6px] border hairline
+                                                     hover:border-[var(--accent)] hover:text-[var(--accent-soft)] interactive">
+                                      {w.name} <span className="dimmer">×{w.runs}</span>
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
 
-                      <p className="prose-dim text-[13px] mt-3">{o.fix}</p>
-                      {o.examples.length > 0 && (
-                        <div className="mono text-[11px] dimmer mt-2">
-                          most often: {o.examples.join(" · ")}
-                        </div>
+                            {o.examples.length > 0 && (
+                              <div>
+                                <CardLabel>Which steps</CardLabel>
+                                <div className="mono text-[11.5px] dim mt-2">{o.examples.join("  ·  ")}</div>
+                              </div>
+                            )}
+
+                            {o.worst.length > 0 && (
+                              <div>
+                                <CardLabel>Worst affected — check the claim yourself</CardLabel>
+                                <div className="grid gap-1 mt-2">
+                                  {o.worst.map((w) => (
+                                    <Link key={w.id} href={`/runs/${w.id}`}
+                                          className="flex items-center justify-between gap-4 px-2.5 py-1.5 rounded-[6px]
+                                                     hover:bg-white/[0.05] interactive group">
+                                      <span className="mono text-[12px] truncate">{w.name}</span>
+                                      <span className="flex items-center gap-3 mono text-[11px] shrink-0">
+                                        {w.usd > 0 && <span className="text-[var(--critical)]">{usd(w.usd)}</span>}
+                                        {w.ms > 0 && <span className="text-[var(--warn)]">{ms(w.ms)}</span>}
+                                        <ArrowRight size={11} className="dimmer opacity-0 group-hover:opacity-100" />
+                                      </span>
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div>
+                              <CardLabel>Why this is reported</CardLabel>
+                              <p className="prose-dim text-[12.5px] mt-1.5">{o.worst[0]?.detail}</p>
+                            </div>
+
+                            <Link href={`/runs?finding=${o.category}`}
+                                  className="mono text-[11.5px] text-[var(--accent-soft)] hover:underline inline-flex items-center gap-1.5">
+                              see all {o.runs} affected run{o.runs === 1 ? "" : "s"} <ArrowRight size={12} />
+                            </Link>
+                          </div>
+                        </motion.div>
                       )}
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </Card>

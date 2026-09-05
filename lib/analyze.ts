@@ -237,7 +237,9 @@ export function contextGrowth(spans: Span[]) {
     const cached = s.cachedTokens ?? 0;
     const uncachedCarried = Math.max(0, carried - cached);
     // a cache read costs ~10% of a fresh input token, so 90% is recoverable
-    const wasteUsd = (uncachedCarried / 1e6) * priceFor(s.model).in * 0.9;
+    // no known rate means no honest figure; the tokens still count
+    const rate = priceFor(s.model);
+    const wasteUsd = rate ? (uncachedCarried / 1e6) * rate.in * 0.9 : 0;
     rows.push({ span: s, novel: total - carried, carried, uncachedCarried, wasteUsd });
   }
   return rows;

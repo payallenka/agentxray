@@ -75,12 +75,18 @@ export interface Opportunity {
   severity: Finding["severity"];
   /** for loops: which step repeats most */
   examples: string[];
+  /** the worst affected runs, so the claim can be checked */
+  worst: { id: string; name: string; usd: number; ms: number; detail: string }[];
+  /** which workflows it shows up in */
+  workflows: { name: string; runs: number }[];
 }
 
 export function opportunities(runs: StoredRun[]): Opportunity[] {
   const acc = new Map<Category, {
     runs: Set<string>; usd: number; ms: number;
     severity: Finding["severity"]; examples: Map<string, number>;
+    hits: { id: string; name: string; usd: number; ms: number; detail: string }[];
+    flows: Map<string, number>;
   }>();
 
   for (const r of runs) {
@@ -89,6 +95,8 @@ export function opportunities(runs: StoredRun[]): Opportunity[] {
       const e = acc.get(c) ?? {
         runs: new Set<string>(), usd: 0, ms: 0,
         severity: "info" as Finding["severity"], examples: new Map<string, number>(),
+        hits: [] as { id: string; name: string; usd: number; ms: number; detail: string }[],
+        flows: new Map<string, number>(),
       };
       e.runs.add(r.id);
       e.usd += f.wastedUsd ?? 0;
@@ -98,6 +106,11 @@ export function opportunities(runs: StoredRun[]): Opportunity[] {
       // the tool name inside a loop title is the actionable detail
       const m = f.title.match(/^([\w.\-]+) (?:called|retried|failed)/);
       if (m) e.examples.set(m[1], (e.examples.get(m[1]) ?? 0) + 1);
+      e.hits.push({
+        id: r.id, name: r.name, usd: f.wastedUsd ?? 0, ms: f.wastedMs ?? 0, detail: f.detail,
+      });
+      const flow = r.name.replace(/\s*\(.*\)\s*$/, "").trim();
+      e.flows.set(flow, (e.flows.get(flow) ?? 0) + 1);
       acc.set(c, e);
     }
   }
@@ -114,6 +127,9 @@ export function opportunities(runs: StoredRun[]): Opportunity[] {
       severity: e.severity,
       examples: [...e.examples.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
         .map(([n, c]) => `${n} ×${c}`),
+      worst: e.hits.sort((a, b) => b.usd - a.usd || b.ms - a.ms).slice(0, 5),
+      workflows: [...e.flows.entries()].sort((a, b) => b[1] - a[1])
+        .map(([name, runs]) => ({ name, runs })),
     }))
     .sort((a, b) => b.usd - a.usd || b.ms - a.ms || b.runs - a.runs);
 }
